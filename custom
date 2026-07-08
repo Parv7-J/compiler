@@ -1,0 +1,85 @@
+get print, ptr, heap, range, copy;
+get hello from "hello";
+
+proc foo[a(i32),b(u32)] : i32 {
+    bar(ptr a, ptr b);
+    seed (a + b);
+}
+
+proc bar[f1(*i32), f2(*i32)] {
+    
+    if *f1 == *f2 and f1 != f2 {
+
+    }else if *f1 == *f2 + 1 {
+        
+    }else {
+
+    }
+
+    while a == true {
+
+    }
+
+    for (i32 i) in range 1,10,2 {
+
+    }
+
+    arr[string] a = ["hello", "world"];
+    heaparr[string] = [];
+    //one based indexing ( lets gooo )
+    heaparr[1];
+
+
+    i32 a = 1;
+    i32 c = heaparr.foo(copy a);
+
+    for (string s) in a {
+        print s;
+    }
+
+    me mestruct = me::hey[]; //or me {};
+    me.//we get the Hello api 
+
+
+    heapstring s = "%f1 %f2";
+    print *s;
+}
+
+pack me {
+   a(i32), b(u32)
+}
+
+methods me {
+    proc hey[]: me {
+        seed me{1,2};
+    }
+    proc foo[*self,a(i32)]: c(i32) {}
+}
+
+aur why {
+    a(i32), me
+}
+
+
+api Hello {
+    //methods defined
+    //default implementations like rust
+}
+
+require Hello for me {
+    //define them
+}
+
+api Bye also Hello {
+
+}
+
+
+1. signed and unsigned 
+2. homogenous arrays
+3. pack types ( struct )
+4. aur types ( enums )
+5. *(type) ( pointer )
+6. ascii string ( heap and static both)
+7. unary ops
+8. binary ops
