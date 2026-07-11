@@ -26,7 +26,6 @@ proc bar[f1(*i32), f2(*i32)] {
 
     arr[string] a = ["hello", "world"];
     heaparr[string] = [];
-    //one based indexing ( lets gooo )
     heaparr[1];
 
 
@@ -37,49 +36,34 @@ proc bar[f1(*i32), f2(*i32)] {
         print s;
     }
 
-    me mestruct = me::hey[]; //or me {};
-    me.//we get the Hello api 
+    me mestruct = me::hey[];
+    me;
 
 
     heapstring s = "%f1 %f2";
     print *s;
 }
 
-pack me {
+packing me {
    a(i32), b(u32)
 }
 
 methods me {
     proc hey[]: me {
-        seed me{1,2};
     }
-    proc foo[*self,a(i32)]: c(i32) {}
 }
 
-aur why {
+aor why {
     a(i32), me
 }
 
 
 api Hello {
-    //methods defined
-    //default implementations like rust
 }
 
 require Hello for me {
-    //define them
 }
 
 api Bye also Hello {
 
 }
-
-
-1. signed and unsigned 
-2. homogenous arrays
-3. pack types ( struct )
-4. aur types ( enums )
-5. *(type) ( pointer )
-6. ascii string ( heap and static both)
-7. unary ops
-8. binary ops
