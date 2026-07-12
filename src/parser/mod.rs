@@ -1,73 +1,14 @@
-use std::collections::{HashMap, hash_map::Entry};
+use std::collections::hash_map::Entry;
 
 use crate::{TokenStream, lexer::token::*};
+mod ast;
+use ast::*;
 
 pub struct Parser<'a> {
-    tokenstream: TokenStream,
-    input: &'a str,
-    cursor: usize,
-    idents: (Vec<String>, HashMap<&'a str, usize>), // idents:
-}
-
-pub struct Ast;
-
-#[derive(Debug, Clone)]
-pub struct Packing {
-    ident: Ident,
-    fields: Vec<Field>,
-}
-#[derive(Debug, Clone)]
-pub struct Aor {
-    ident: Ident,
-    variants: Vec<Variant>,
-}
-
-#[derive(Debug, Clone)]
-pub enum Variant {
-    Field(Field),
-    Ident(Ident),
-}
-
-#[derive(Debug, Clone)]
-pub struct Field {
-    ident: Ident,
-    ty: IdentTy,
-}
-
-#[derive(Debug, Clone)]
-pub struct Ident(usize);
-
-#[derive(Debug, Clone)]
-pub enum IdentTy {
-    Type(Ty),
-    Ident(Ident),
-}
-
-#[derive(Debug, Clone)]
-pub struct Procedure {
-    ident: Ident,
-    args: Vec<Field>,
-    return_value: Option<IdentTy>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Methods {
-    ident: Ident,
-    procedures: Vec<Procedure>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Api {
-    ident: Ident,
-    super_api: Vec<Ident>,
-    procedures: Vec<Procedure>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Require {
-    ident: Ident,
-    api: Ident,
-    procedures: Vec<Procedure>,
+    pub tokenstream: TokenStream,
+    pub input: &'a str,
+    pub cursor: usize,
+    pub idents: Intern<'a>,
 }
 
 impl<'a> Parser<'a> {
@@ -76,7 +17,7 @@ impl<'a> Parser<'a> {
             tokenstream: ts,
             input,
             cursor: 0,
-            idents: (Vec::new(), HashMap::new()),
+            idents: Intern::new(),
         }
     }
 
@@ -92,27 +33,34 @@ impl<'a> Parser<'a> {
         self.tokenstream.tokens.get(self.cursor).map(|t| t.kind)
     }
 
-    pub fn parse(&mut self) -> Ast {
+    pub fn parse(mut self) -> Ast<'a> {
+        let mut declarations = Vec::new();
         while let Some(token) = self.peek() {
             self.next();
-            match token {
-                TokenKind::Operator(operator) => todo!(),
+            let declaration = match token {
+                TokenKind::Operator(_operator) => todo!(),
                 TokenKind::String => todo!(),
                 TokenKind::Ident => todo!(),
                 TokenKind::Keyword(keyword) => self.parse_keyword(keyword),
-                TokenKind::Punctuation(punctuation) => todo!(),
-                TokenKind::Delimiter(delimiter) => todo!(),
+                TokenKind::Punctuation(_punctuation) => todo!(),
+                TokenKind::Delimiter(_delimiter) => todo!(),
                 TokenKind::Number => todo!(),
                 _ => unimplemented!(),
-            }
+            };
+            declarations.push(declaration);
         }
 
-        Ast {}
+        println!("{:#?}", self.idents);
+
+        Ast {
+            declarations,
+            intern: self.idents,
+        }
     }
 
-    fn parse_keyword(&mut self, keyword: Keyword) {
+    fn parse_keyword(&mut self, keyword: Keyword) -> Declaration {
         match keyword {
-            Keyword::Type(ty) => todo!(),
+            Keyword::Type(_ty) => todo!(),
             Keyword::If => todo!(),
             Keyword::Else => todo!(),
             Keyword::While => todo!(),
@@ -122,33 +70,32 @@ impl<'a> Parser<'a> {
             Keyword::Get => todo!(),
             Keyword::Proc => {
                 let proc = self.parse_proc().unwrap();
-                println!("Parsed: {proc:?}");
+                Declaration::Procedure(proc)
             }
             Keyword::Methods => {
                 let methods = self.parse_methods().unwrap();
-                println!("Methods: {methods:?}");
+                Declaration::Methods(methods)
             }
             Keyword::Require => {
                 let require = self.parse_require().unwrap();
-                println!("Require: {require:?}");
+                Declaration::Require(require)
             }
             Keyword::Aor => {
                 let aor = self.parse_aor().unwrap();
-                println!("Parsed: {aor:?}");
+                Declaration::Aor(aor)
             }
             Keyword::Packing => {
                 let packing = self.parse_packing().unwrap();
-                println!("Parsed: {packing:?}");
+                Declaration::Packing(packing)
             }
             Keyword::Api => {
                 let api = self.parse_api().unwrap();
-                println!("Api: {api:?}");
+                Declaration::Api(api)
             }
-
             Keyword::Also | Keyword::Range | Keyword::In | Keyword::From => {
                 panic!("Cannot have 'also' as the top token");
             }
-        };
+        }
     }
 
     fn expect(&mut self, token: TokenKind) -> Result<Token, String> {
@@ -299,16 +246,6 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_ident(&mut self) -> Result<Ident, String> {
-        match self.next() {
-            Some(Token {
-                kind: TokenKind::Ident,
-                span,
-            }) => Ok(Ident(self.span_to_id(span))),
-            token => Err(format!("Expected Ident, Found: {token:?}")),
-        }
-    }
-
     fn parse_packing(&mut self) -> Result<Packing, String> {
         let ident = self.parse_ident()?;
 
@@ -364,21 +301,19 @@ impl<'a> Parser<'a> {
         }
         self.next();
 
-        let ty = match self.next() {
-            Some(Token {
-                kind: TokenKind::Keyword(Keyword::Type(t)),
-                ..
-            }) => IdentTy::Type(t),
-            Some(Token {
-                kind: TokenKind::Ident,
-                span,
-            }) => IdentTy::Ident(Ident(self.span_to_id(span))),
-            token => return Err(format!("Expected Type/Ident, Found: {token:?}")),
-        };
+        let ty = self.parse_identty()?;
 
         self.expect(TokenKind::Delimiter(Delimiter::ParenClose))?;
 
         Ok(Variant::Field(Field { ident, ty }))
+    }
+
+    fn parse_field(&mut self) -> Result<Field, String> {
+        let ident = self.parse_ident()?;
+        self.expect(TokenKind::Delimiter(Delimiter::ParenOpen))?;
+        let ty = self.parse_identty()?;
+        self.expect(TokenKind::Delimiter(Delimiter::ParenClose))?;
+        Ok(Field { ident, ty })
     }
 
     fn parse_identty(&mut self) -> Result<IdentTy, String> {
@@ -395,43 +330,31 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_field(&mut self) -> Result<Field, String> {
-        let ident = self.parse_ident()?;
-
-        self.expect(TokenKind::Delimiter(Delimiter::ParenOpen))?;
-
-        let ty = match self.next() {
-            Some(Token {
-                kind: TokenKind::Keyword(Keyword::Type(t)),
-                ..
-            }) => IdentTy::Type(t),
+    fn parse_ident(&mut self) -> Result<Ident, String> {
+        match self.next() {
             Some(Token {
                 kind: TokenKind::Ident,
                 span,
-            }) => IdentTy::Ident(Ident(self.span_to_id(span))),
-            token => return Err(format!("Expected Type/Ident, Found: {token:?}")),
-        };
-
-        self.expect(TokenKind::Delimiter(Delimiter::ParenClose))?;
-
-        Ok(Field { ident, ty })
+            }) => Ok(Ident(self.span_to_id(span))),
+            token => Err(format!("Expected Ident, Found: {token:?}")),
+        }
     }
 
     fn span_to_id(&mut self, span: Span) -> usize {
         let Span { start, end } = span;
         let ident = &self.input[start as usize..end as usize];
-        match self.idents.1.entry(ident) {
+        match self.idents.ids.entry(ident) {
             Entry::Occupied(occupied_entry) => *occupied_entry.get(),
             Entry::Vacant(vacant_entry) => {
-                let pos = self.idents.0.len();
-                self.idents.0.push(ident.to_string());
+                let pos = self.idents.db.len();
+                self.idents.db.push(ident.to_string());
                 vacant_entry.insert(pos);
                 pos
             }
         }
     }
 
-    fn id_to_ident(&self, id: usize) -> Option<&String> {
-        self.idents.0.get(id)
+    fn _id_to_ident(&self, id: usize) -> Option<&String> {
+        self.idents.db.get(id)
     }
 }

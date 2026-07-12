@@ -27,4 +27,6 @@ fn main() {
 
     let mut parser = Parser::new(ts, &input);
     let ast = parser.parse();
+
+    println!("{ast:#?}");
 }

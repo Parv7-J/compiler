@@ -26,6 +26,7 @@ pub enum Started {
 }
 
 impl<'a> Lexer<'a, std::str::Chars<'a>> {
+    #[allow(clippy::result_unit_err)]
     pub fn new(input: &'a str) -> Result<Self, ()> {
         if input.len() > u32::MAX as usize {
             return Err(());
@@ -74,7 +75,7 @@ impl<'a> Lexer<'a, std::str::Chars<'a>> {
     ///Returns the next char in the input, consuming it from the input
     ///Should only be called if we are certain that calling 'next' on the input wont return None
     ///Thus, a call to peek + is_eof(if peek returns 'EOF_CHAR') is necessary before this
-    fn consume(&mut self) -> char {
+    fn _consume(&mut self) -> char {
         self.chars.next().unwrap()
     }
 
