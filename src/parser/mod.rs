@@ -1,56 +1,52 @@
 use std::collections::hash_map::Entry;
 
-use crate::{TokenStream, lexer::token::*};
+use crate::{Lexer, lexer::token::*};
 mod ast;
 use ast::*;
 
 pub struct Parser<'a> {
-    pub tokenstream: TokenStream,
-    pub input: &'a str,
-    pub cursor: usize,
+    pub lexer: Lexer<'a, std::str::Chars<'a>>,
+    pub token: Option<Token>,
     pub idents: Intern<'a>,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(ts: TokenStream, input: &'a str) -> Self {
+    pub fn new(lexer: Lexer<'a, std::str::Chars<'a>>) -> Self {
         Self {
-            tokenstream: ts,
-            input,
-            cursor: 0,
+            lexer,
+            token: None,
             idents: Intern::new(),
         }
     }
 
     fn next(&mut self) -> Option<Token> {
-        let token = self.tokenstream.tokens.get(self.cursor).copied();
-        if token.is_some() {
-            self.cursor += 1;
-        }
-        token
+        self.token.take().or_else(|| self.lexer.next())
     }
 
-    fn peek(&self) -> Option<TokenKind> {
-        self.tokenstream.tokens.get(self.cursor).map(|t| t.kind)
+    fn peek(&mut self) -> Option<TokenKind> {
+        let token = self.token.as_ref();
+        if let Some(t) = token {
+            return Some(t.kind);
+        }
+
+        let token = self.lexer.next();
+        if let Some(t) = token {
+            self.token = Some(t);
+            return Some(t.kind);
+        }
+
+        None
     }
 
     pub fn parse(mut self) -> Ast<'a> {
         let mut declarations = Vec::new();
-        while let Some(token) = self.peek() {
-            self.next();
-            let declaration = match token {
-                TokenKind::Operator(_operator) => todo!(),
-                TokenKind::String => todo!(),
-                TokenKind::Ident => todo!(),
-                TokenKind::Keyword(keyword) => self.parse_keyword(keyword),
-                TokenKind::Punctuation(_punctuation) => todo!(),
-                TokenKind::Delimiter(_delimiter) => todo!(),
-                TokenKind::Number => todo!(),
-                _ => unimplemented!(),
-            };
-            declarations.push(declaration);
+        while let Some(token) = self.next() {
+            if let TokenKind::Keyword(keyword) = token.kind {
+                declarations.push(self.parse_keyword(keyword));
+            }
         }
 
-        println!("{:#?}", self.idents);
+        // println!("{:#?}", self.idents);
 
         Ast {
             declarations,
@@ -342,7 +338,7 @@ impl<'a> Parser<'a> {
 
     fn span_to_id(&mut self, span: Span) -> usize {
         let Span { start, end } = span;
-        let ident = &self.input[start as usize..end as usize];
+        let ident = &self.lexer.input[start as usize..end as usize];
         match self.idents.ids.entry(ident) {
             Entry::Occupied(occupied_entry) => *occupied_entry.get(),
             Entry::Vacant(vacant_entry) => {

@@ -65,6 +65,8 @@ impl<'a> TryFrom<&'a str> for Keyword {
             )),
             "isize" => Self::Type(Ty::Signed(BitWidth::Word)),
             "usize" => Self::Type(Ty::Unsigned(BitWidth::Word)),
+            "f32" => Self::Type(Ty::Float32),
+            "f64" => Self::Type(Ty::Float64),
             "if" => Self::If,
             "else" => Self::Else,
             "while" => Self::While,
@@ -95,6 +97,8 @@ impl<'a> TryFrom<&'a str> for Keyword {
 pub enum Ty {
     Signed(BitWidth),
     Unsigned(BitWidth),
+    Float32,
+    Float64,
     Arr,
     HeapArr,
     String,

@@ -3,16 +3,17 @@ use token::*;
 
 pub const EOF_CHAR: char = '\0';
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct Lexer<'a, I> {
-    input: &'a str,
-    at: u32,
-    chars: I,
-    state: State,
+    pub input: &'a str,
+    pub at: u32,
+    pub chars: I,
+    pub state: State,
     pub newlines: Vec<u32>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-enum State {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum State {
     Idle,
     Started(Started),
 }
@@ -22,7 +23,17 @@ pub enum Started {
     Operator(Operator),
     String(u32),
     Ident(u32),
-    Number(u32),
+    Number(u32, bool),
+}
+
+impl<'a> Iterator for Lexer<'a, std::str::Chars<'a>> {
+    type Item = Token;
+    fn next(&mut self) -> Option<Token> {
+        match self.advance_token() {
+            t if t.kind == TokenKind::Eof => None,
+            t => Some(t),
+        }
+    }
 }
 
 impl<'a> Lexer<'a, std::str::Chars<'a>> {
@@ -56,7 +67,7 @@ impl<'a> Lexer<'a, std::str::Chars<'a>> {
             TokenKind::Number => Token::new(kind, start, self.at),
             TokenKind::Operator(_) => match start_opt {
                 Some(_) => Token::new(kind, start, start + 1),
-                None => Token::new(kind, start - 1, self.bump() + 1),
+                None => Token::new(kind, self.at - 2, self.at),
             },
             _ => unimplemented!(),
         }
@@ -100,7 +111,6 @@ impl<'a> Lexer<'a, std::str::Chars<'a>> {
             let ch = self.peek();
 
             if ch == EOF_CHAR {
-                println!("EOF Reached");
                 if self.is_eof() {
                     match self.state {
                         State::Started(Started::Operator(op)) => {
@@ -134,9 +144,20 @@ impl<'a> Lexer<'a, std::str::Chars<'a>> {
 
             match self.state {
                 State::Idle => match ch {
-                    '&' | '|' | '+' | '-' | '*' | '/' | '<' | '>' | '=' | '!' => {
+                    '&' | '|' | '+' | '*' | '/' | '<' | '>' | '=' | '!' => {
                         self.bump();
+                        //shouldnt we just not do this, and do lookahead, because starting an
+                        //operating is complicating the lexer
                         self.state = State::Started(Started::Operator(ch.try_into().unwrap()))
+                    }
+                    '-' => {
+                        let start = self.bump();
+                        let ch = self.peek();
+                        if !ch.is_ascii_digit() {
+                            self.state = State::Started(Started::Operator(Operator::Minus));
+                        } else {
+                            self.state = State::Started(Started::Number(start, false));
+                        }
                     }
                     '"' => {
                         self.state = State::Started(Started::String(self.bump()));
@@ -145,7 +166,7 @@ impl<'a> Lexer<'a, std::str::Chars<'a>> {
                         self.state = State::Started(Started::Ident(self.bump()));
                     }
                     '0'..='9' => {
-                        self.state = State::Started(Started::Number(self.bump()));
+                        self.state = State::Started(Started::Number(self.bump(), false));
                     }
 
                     ';' | ',' | ':' => {
@@ -156,7 +177,10 @@ impl<'a> Lexer<'a, std::str::Chars<'a>> {
                         return self
                             .produce_token(TokenKind::Delimiter(ch.try_into().unwrap()), None);
                     }
-                    '.' => return self.produce_token(TokenKind::Operator(Operator::Dot), None),
+                    '.' => {
+                        let start = self.bump();
+                        return self.produce_token(TokenKind::Operator(Operator::Dot), Some(start));
+                    }
 
                     _ => {
                         //TODO: batch unknowns
@@ -164,7 +188,6 @@ impl<'a> Lexer<'a, std::str::Chars<'a>> {
                         return Token::new(TokenKind::Unknown, at, at + 1);
                     }
                 },
-                //now correct
                 State::Started(Started::Operator(first)) => match ch {
                     '=' => {
                         self.state = State::Idle;
@@ -198,12 +221,13 @@ impl<'a> Lexer<'a, std::str::Chars<'a>> {
                         return self.produce_token(TokenKind::Operator(first), Some(self.at - 1));
                     }
                 },
-                //correct
-                State::Started(Started::String(start)) if ch == '"' => {
+                State::Started(Started::String(start)) => {
+                    if ch != '"' {
+                        continue;
+                    }
                     self.state = State::Idle;
                     self.produce_token(TokenKind::String, Some(start));
                 }
-                //correct
                 State::Started(Started::Ident(start)) => match ch {
                     'a'..='z' | 'A'..='Z' | '0'..='9' | '_' => {
                         self.bump();
@@ -218,15 +242,18 @@ impl<'a> Lexer<'a, std::str::Chars<'a>> {
                         }
                     }
                 },
-                //correct
-                State::Started(Started::Number(start)) if !ch.is_ascii_digit() => {
+                State::Started(Started::Number(start, ref mut dot_encountered)) => {
+                    if ch.is_ascii_digit() {
+                        self.bump();
+                        continue;
+                    }
+                    if ch == '.' && !*dot_encountered {
+                        *dot_encountered = true;
+                        self.bump();
+                        continue;
+                    }
                     self.state = State::Idle;
                     return self.produce_token(TokenKind::Number, Some(start));
-                }
-                //TODO: move them in their arms only , will you
-                //correct -> started number and a digit, or started string and a valid char
-                _ => {
-                    self.bump();
                 }
             }
         }
