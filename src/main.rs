@@ -11,20 +11,20 @@
 
 use compiler::*;
 use std::fs;
-// use std::io::BufRead;
+use std::io::BufRead;
 
 fn main() {
-    // let mut stdin = std::io::stdin().lock();
-    // let mut input = String::new();
-    // stdin.read_line(&mut input).unwrap();
+    let mut stdin = std::io::stdin().lock();
+    let mut input = String::new();
+    stdin.read_line(&mut input).unwrap();
 
-    let input = fs::read_to_string("language").unwrap();
+    // let input = fs::read_to_string("custom").unwrap();
 
     let lexer = Lexer::new(&input);
 
-    let ts = TokenStream::new(lexer);
-    println!("{ts:?}");
+    let ts = TokenStream::new(lexer.unwrap());
+    println!("{ts:#?}");
 
-    let mut parser = Parser::new(&ts);
-    let ast = parser.parse();
+    // let mut parser = Parser::new(&ts);
+    // let ast = parser.parse();
 }

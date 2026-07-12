@@ -1,6 +1,7 @@
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Token {
-    kind: TokenKind,
-    span: Span,
+    pub kind: TokenKind,
+    pub span: Span,
 }
 
 impl Token {
@@ -12,6 +13,7 @@ impl Token {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Span {
     pub start: u32,
     pub end: u32,
@@ -27,6 +29,7 @@ pub enum TokenKind {
     Punctuation(Punctuation),
     Delimiter(Delimiter),
     Unknown,
+    Eof,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -137,6 +140,23 @@ pub enum Operator {
     CompoundAssign(CompoundAssignOperator),
 }
 
+impl Operator {
+    pub fn suffix_equal(self) -> Option<Operator> {
+        let new_op = match self {
+            Operator::Not => Operator::Comparision(ComparisionOperator::NotEqual),
+            Operator::Comparision(ComparisionOperator::Equal) => Operator::Assign,
+            Operator::Comparision(ComparisionOperator::LessThan) => {
+                Operator::Comparision(ComparisionOperator::LessEqual)
+            }
+            Operator::Comparision(ComparisionOperator::GreaterThan) => {
+                Operator::Comparision(ComparisionOperator::GreaterEqual)
+            }
+            _ => return None,
+        };
+        Some(new_op)
+    }
+}
+
 impl TryFrom<char> for Operator {
     type Error = ();
     fn try_from(value: char) -> Result<Self, Self::Error> {
@@ -164,14 +184,16 @@ pub enum Punctuation {
     Comma,
 }
 
-impl From<char> for Punctuation {
-    fn from(value: char) -> Self {
-        match value {
+impl TryFrom<char> for Punctuation {
+    type Error = ();
+    fn try_from(value: char) -> Result<Self, Self::Error> {
+        let punct = match value {
             ';' => Punctuation::Semicolon,
             ':' => Punctuation::Colon,
             ',' => Punctuation::Comma,
-            _ => panic!("cant convert man"),
-        }
+            _ => return Err(()),
+        };
+        Ok(punct)
     }
 }
 
