@@ -3,7 +3,7 @@ mod parser;
 
 pub use lexer::Lexer;
 pub use lexer::token::Token;
-// pub use parser::Parser;
+pub use parser::Parser;
 
 use crate::lexer::token::TokenKind;
 
