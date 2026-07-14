@@ -13,7 +13,7 @@ use compiler::*;
 use std::fs;
 use std::io::BufRead;
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     // let mut stdin = std::io::stdin().lock();
     // let mut input = String::new();
     // stdin.read_line(&mut input).unwrap();
@@ -31,7 +31,7 @@ fn main() {
     // }
 
     let parser = Parser::new(lexer);
-    let ast = parser.parse();
-
-    println!("AST: {ast:?}");
+    let ast = parser.parse()?;
+    println!("{ast:?}");
+    Ok(())
 }

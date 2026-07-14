@@ -30,10 +30,11 @@ pub enum Item {
     Methods(Methods),     //impl Struct
     Api(Api),             //traits
     Require(Require),     //impl trait
+    Get(Get),             // use
 }
 
 #[derive(Debug, Clone)]
-pub struct Block(Vec<BlockItem>);
+pub struct Block(pub Vec<BlockItem>);
 
 #[derive(Debug, Clone)]
 pub enum BlockItem {
@@ -66,6 +67,7 @@ pub enum Stmt {
         condition: Expr,
         block: Block,
     },
+    Expr(Expr),
 }
 
 #[derive(Debug, Clone)]
@@ -75,7 +77,7 @@ pub struct Conditional {
 }
 
 #[derive(Debug, Clone)]
-pub enum Expr {}
+pub struct Expr;
 
 #[derive(Debug, Clone)]
 pub struct Packing {
@@ -104,6 +106,15 @@ pub struct Field {
 pub struct Ident(pub usize);
 
 #[derive(Debug, Clone)]
+pub struct LiteralString(pub Span);
+
+#[derive(Debug, Clone)]
+pub struct Get {
+    pub imports: Vec<Ident>,
+    pub module: LiteralString,
+}
+
+#[derive(Debug, Clone)]
 pub enum IdentTy {
     Type(Ty),
     Ident(Ident),
@@ -114,6 +125,7 @@ pub struct Procedure {
     pub ident: Ident,
     pub args: Vec<Field>,
     pub return_value: Option<IdentTy>,
+    pub body: Block,
 }
 
 #[derive(Debug, Clone)]
