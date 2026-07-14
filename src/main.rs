@@ -14,24 +14,24 @@ use std::fs;
 use std::io::BufRead;
 
 fn main() {
-    let mut stdin = std::io::stdin().lock();
-    let mut input = String::new();
-    stdin.read_line(&mut input).unwrap();
+    // let mut stdin = std::io::stdin().lock();
+    // let mut input = String::new();
+    // stdin.read_line(&mut input).unwrap();
 
-    // let input = fs::read_to_string("language").unwrap();
+    let input = fs::read_to_string("language").unwrap();
 
     let lexer = Lexer::new(&input).unwrap();
-    let tokens = lexer.collect::<Vec<Token>>();
-    for token in tokens {
-        println!(
-            "TokenKind: {:?}, String: {}",
-            token.kind,
-            &input[token.span.start as usize..token.span.end as usize]
-        );
-    }
+    // let tokens = lexer.collect::<Vec<Token>>();
+    // for token in tokens {
+    //     println!(
+    //         "TokenKind: {:?}, String: {}",
+    //         token.kind,
+    //         &input[token.span.start as usize..token.span.end as usize]
+    //     );
+    // }
 
-    // let parser = Parser::new(lexer);
-    // let ast = parser.parse();
+    let parser = Parser::new(lexer);
+    let ast = parser.parse();
 
-    // println!("AST: {ast:?}");
+    println!("AST: {ast:?}");
 }

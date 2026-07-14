@@ -39,22 +39,22 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse(mut self) -> Ast<'a> {
-        let mut declarations = Vec::new();
+        let mut items = Vec::new();
         while let Some(token) = self.next() {
             if let TokenKind::Keyword(keyword) = token.kind {
-                declarations.push(self.parse_keyword(keyword));
+                items.push(self.parse_item(keyword));
             }
         }
 
         // println!("{:#?}", self.idents);
 
         Ast {
-            declarations,
+            items,
             intern: self.idents,
         }
     }
 
-    fn parse_keyword(&mut self, keyword: Keyword) -> Declaration {
+    fn parse_item(&mut self, keyword: Keyword) -> Item {
         match keyword {
             Keyword::Type(_ty) => todo!(),
             Keyword::If => todo!(),
@@ -66,27 +66,27 @@ impl<'a> Parser<'a> {
             Keyword::Get => todo!(),
             Keyword::Proc => {
                 let proc = self.parse_proc().unwrap();
-                Declaration::Procedure(proc)
+                Item::Procedure(proc)
             }
             Keyword::Methods => {
                 let methods = self.parse_methods().unwrap();
-                Declaration::Methods(methods)
+                Item::Methods(methods)
             }
             Keyword::Require => {
                 let require = self.parse_require().unwrap();
-                Declaration::Require(require)
+                Item::Require(require)
             }
             Keyword::Aor => {
                 let aor = self.parse_aor().unwrap();
-                Declaration::Aor(aor)
+                Item::Aor(aor)
             }
             Keyword::Packing => {
                 let packing = self.parse_packing().unwrap();
-                Declaration::Packing(packing)
+                Item::Packing(packing)
             }
             Keyword::Api => {
                 let api = self.parse_api().unwrap();
-                Declaration::Api(api)
+                Item::Api(api)
             }
             Keyword::Also | Keyword::Range | Keyword::In | Keyword::From => {
                 panic!("Cannot have 'also' as the top token");
@@ -333,6 +333,164 @@ impl<'a> Parser<'a> {
                 span,
             }) => Ok(Ident(self.span_to_id(span))),
             token => Err(format!("Expected Ident, Found: {token:?}")),
+        }
+    }
+
+    //a block is defined between { and } -> defines a scope
+    fn parse_block(&mut self) -> Result<Block, String> {
+        //assignments, if else, while, returns, for, function calling, can be a declaration too!
+        todo!()
+    }
+
+    fn parse_stmt(&mut self) -> Result<Stmt, String> {
+        let kind = self.peek();
+        match kind {
+            //TODO: clean this up, and i guess there is some bug here
+            Some(TokenKind::Ident) => {
+                let ident = self.parse_identty()?;
+                if self.peek() == Some(TokenKind::Ident) {
+                    self.parse_exprstmt(ident)
+                } else {
+                    self.parse_declaration(ident)
+                }
+            }
+            Some(TokenKind::Keyword(Keyword::Type(_))) => {
+                let identty = self.parse_identty()?;
+                self.parse_declaration(identty)
+            }
+            Some(TokenKind::Keyword(Keyword::If)) => self.parse_conditional(),
+            Some(TokenKind::Keyword(Keyword::For)) => self.parse_for(),
+            Some(TokenKind::Keyword(Keyword::While)) => self.parse_while(),
+            Some(TokenKind::Keyword(Keyword::Seed)) => self.parse_seed(),
+            _ => Err(format!("Unexpected kind: {kind:?}")),
+        }
+    }
+
+    fn parse_exprstmt(&self, ident: IdentTy) -> Result<Stmt, String> {
+        Err(String::from("hello"))
+    }
+
+    fn parse_expr(&mut self) -> Result<Expr, String> {
+        Err(String::from("hello"))
+    }
+
+    fn parse_declaration(&mut self, ty: IdentTy) -> Result<Stmt, String> {
+        let var = self.parse_ident()?;
+        self.expect(TokenKind::Operator(Operator::Assign))?;
+        let value = self.parse_expr()?;
+        self.expect(TokenKind::Punctuation(Punctuation::Semicolon))?;
+        Ok(Stmt::Declaration { ty, var, value })
+    }
+
+    fn parse_seed(&mut self) -> Result<Stmt, String> {
+        self.expect(TokenKind::Keyword(Keyword::Seed))?;
+        let return_value = self.parse_expr()?;
+        self.expect(TokenKind::Punctuation(Punctuation::Semicolon))?;
+        Ok(Stmt::Seed { return_value })
+    }
+
+    fn parse_conditional(&mut self) -> Result<Stmt, String> {
+        self.expect(TokenKind::Keyword(Keyword::If))?;
+        let condition = self.parse_expr()?;
+        self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;
+        let block = self.parse_block()?;
+        self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
+        let ifs = Conditional { condition, block };
+        let (elseifs, elses) = self.parse_else()?;
+        Ok(Stmt::Conditional {
+            ifs,
+            elseifs,
+            elses,
+        })
+    }
+
+    fn parse_else(&mut self) -> Result<(Vec<Conditional>, Option<Block>), String> {
+        let mut elseifs = Vec::new();
+        let mut elses = None;
+        #[allow(clippy::while_let_loop)]
+        loop {
+            match self.peek() {
+                Some(TokenKind::Keyword(Keyword::Else)) => {
+                    self.next();
+                    match self.peek() {
+                        Some(TokenKind::Keyword(Keyword::If)) => {
+                            self.next();
+                            let condition = self.parse_expr()?;
+                            self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;
+                            let block = self.parse_block()?;
+                            self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
+                            elseifs.push(Conditional { condition, block });
+                        }
+                        _ => {
+                            self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;
+                            let block = self.parse_block()?;
+                            self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
+                            elses = Some(block);
+                            break;
+                        }
+                    }
+                }
+                _ => break,
+            }
+        }
+        Ok((elseifs, elses))
+    }
+
+    fn parse_for(&mut self) -> Result<Stmt, String> {
+        self.expect(TokenKind::Keyword(Keyword::For))?;
+        self.expect(TokenKind::Delimiter(Delimiter::ParenOpen))?;
+        let ty = self.parse_identty()?;
+        let ident = self.parse_ident()?;
+        self.expect(TokenKind::Delimiter(Delimiter::ParenClose))?;
+        self.expect(TokenKind::Keyword(Keyword::In))?;
+        match self.peek() {
+            Some(TokenKind::Keyword(Keyword::Range)) => {
+                self.next();
+                let range = self.parse_range()?;
+                self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
+                let block = self.parse_block()?;
+                self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
+                Ok(Stmt::For {
+                    ident,
+                    ty,
+                    range: Some(range),
+                    block,
+                })
+            }
+            _ => {
+                self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
+                let block = self.parse_block()?;
+                self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
+                Ok(Stmt::For {
+                    ident,
+                    ty,
+                    range: None,
+                    block,
+                })
+            }
+        }
+    }
+
+    fn parse_while(&mut self) -> Result<Stmt, String> {
+        self.expect(TokenKind::Keyword(Keyword::While))?;
+        let condition = self.parse_expr()?;
+        self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
+        let block = self.parse_block()?;
+        self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
+        Ok(Stmt::While { condition, block })
+    }
+
+    fn parse_range(&mut self) -> Result<(Expr, Expr, Option<Expr>), String> {
+        let start = self.parse_expr()?;
+        self.expect(TokenKind::Punctuation(Punctuation::Comma))?;
+        let end = self.parse_expr()?;
+        match self.peek() {
+            Some(TokenKind::Punctuation(Punctuation::Comma)) => {
+                self.next();
+                let jump = self.parse_expr()?;
+                Ok((start, end, Some(jump)))
+            }
+            _ => Ok((start, end, None)),
         }
     }
 

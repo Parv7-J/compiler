@@ -1,21 +1,5 @@
 proc foo[a(i32),b(u32)] : i32 {
-}
-packing me {
-   a(i32), b(u32)
-}
-methods me {
-    proc hey[]: me {
-    }
-}
-aor why {
-    a(i32), me
-}
-
-api Hello {
-}
-
-require Hello for me {
-}
-
-api Bye also Hello {
+    i32 a = 1;
+    i32 b = 2;
+    i32 c = a + b;
 }

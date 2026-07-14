@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct Ast<'a> {
-    pub declarations: Vec<Declaration>,
+    pub items: Vec<Item>,
     pub intern: Intern<'a>,
 }
 
@@ -23,14 +23,59 @@ impl Intern<'_> {
 }
 
 #[derive(Debug, Clone)]
-pub enum Declaration {
-    Packing(Packing),
-    Aor(Aor),
-    Procedure(Procedure),
-    Methods(Methods),
-    Api(Api),
-    Require(Require),
+pub enum Item {
+    Packing(Packing),     //struct
+    Aor(Aor),             //enum
+    Procedure(Procedure), //fn
+    Methods(Methods),     //impl Struct
+    Api(Api),             //traits
+    Require(Require),     //impl trait
 }
+
+#[derive(Debug, Clone)]
+pub struct Block(Vec<BlockItem>);
+
+#[derive(Debug, Clone)]
+pub enum BlockItem {
+    Item(Item),
+    Stmt(Stmt),
+}
+
+#[derive(Debug, Clone)]
+pub enum Stmt {
+    Declaration {
+        ty: IdentTy,
+        var: Ident,
+        value: Expr,
+    },
+    Seed {
+        return_value: Expr,
+    },
+    Conditional {
+        ifs: Conditional,
+        elseifs: Vec<Conditional>,
+        elses: Option<Block>,
+    },
+    For {
+        ident: Ident,
+        ty: IdentTy,
+        range: Option<(Expr, Expr, Option<Expr>)>,
+        block: Block,
+    },
+    While {
+        condition: Expr,
+        block: Block,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct Conditional {
+    pub condition: Expr,
+    pub block: Block,
+}
+
+#[derive(Debug, Clone)]
+pub enum Expr {}
 
 #[derive(Debug, Clone)]
 pub struct Packing {
