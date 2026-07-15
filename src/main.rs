@@ -10,16 +10,25 @@
 //OPTIONAL REFACTOR: Instead of looping, delegate to eater functions
 
 use compiler::*;
+use miette::MietteHandlerOpts;
 use std::fs;
 use std::io::BufRead;
 
-fn main() -> anyhow::Result<()> {
+fn main() -> miette::Result<()> {
     // let mut stdin = std::io::stdin().lock();
     // let mut input = String::new();
     // stdin.read_line(&mut input).unwrap();
+    miette::set_hook(Box::new(|_| {
+        Box::new(
+            MietteHandlerOpts::new()
+                .context_lines(3) // <-- Change this to show more lines above and below
+                .build(),
+        )
+    }))
+    .unwrap();
 
-    let input = fs::read_to_string("language").unwrap();
-
+    let fname = "language";
+    let input = fs::read_to_string(fname).unwrap();
     let lexer = Lexer::new(&input).unwrap();
     // let tokens = lexer.collect::<Vec<Token>>();
     // for token in tokens {
@@ -31,7 +40,7 @@ fn main() -> anyhow::Result<()> {
     // }
 
     let parser = Parser::new(lexer);
-    let ast = parser.parse()?;
+    let ast = parser.parse(fname)?;
     println!("{ast:?}");
     Ok(())
 }

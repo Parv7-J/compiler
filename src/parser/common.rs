@@ -1,9 +1,10 @@
 use super::Parser;
 use super::ast::*;
 use crate::lexer::token::*;
+use crate::parser::error::ParseError;
 
 impl Parser<'_> {
-    pub fn parse_block(&mut self) -> anyhow::Result<Block> {
+    pub fn parse_block(&mut self) -> miette::Result<Block> {
         let mut block = Vec::new();
         loop {
             let token = self.peek();
@@ -49,7 +50,7 @@ impl Parser<'_> {
         Ok(Block(block))
     }
 
-    pub fn parse_range(&mut self) -> anyhow::Result<(Expr, Expr, Option<Expr>)> {
+    pub fn parse_range(&mut self) -> miette::Result<(S, S, Option<S>)> {
         let start = self.parse_expr()?;
         self.expect(TokenKind::Punctuation(Punctuation::Comma))?;
         let end = self.parse_expr()?;
@@ -62,33 +63,8 @@ impl Parser<'_> {
             _ => Ok((start, end, None)),
         }
     }
-    pub fn parse_identty(&mut self) -> anyhow::Result<IdentTy> {
-        match self.next() {
-            Some(Token {
-                kind: TokenKind::Keyword(Keyword::Type(t)),
-                ..
-            }) => Ok(IdentTy::Type(t)),
-            Some(Token {
-                kind: TokenKind::Ident,
-                span,
-            }) => Ok(IdentTy::Ident(Ident(self.span_to_id(span)))),
-            Some(token) => Err(anyhow::anyhow!("Expected Ident or Type, Found: {token:?}")),
-            None => Err(anyhow::anyhow!("Expected Ident or Type, Reached EOF")),
-        }
-    }
 
-    pub fn parse_ident(&mut self) -> anyhow::Result<Ident> {
-        match self.next() {
-            Some(Token {
-                kind: TokenKind::Ident,
-                span,
-            }) => Ok(Ident(self.span_to_id(span))),
-            Some(token) => Err(anyhow::anyhow!("Expected Ident, Found: {token:?}")),
-            None => Err(anyhow::anyhow!("Expected Ident, Reached EOF")),
-        }
-    }
-
-    pub fn parse_variant(&mut self) -> anyhow::Result<Variant> {
+    pub fn parse_variant(&mut self) -> miette::Result<Variant> {
         let ident = self.parse_ident()?;
         if self.peek() != Some(TokenKind::Delimiter(Delimiter::ParenOpen)) {
             return Ok(Variant::Ident(ident));
@@ -99,7 +75,7 @@ impl Parser<'_> {
         Ok(Variant::Field(Field { ident, ty }))
     }
 
-    pub fn parse_field(&mut self) -> anyhow::Result<Field> {
+    pub fn parse_field(&mut self) -> miette::Result<Field> {
         let ident = self.parse_ident()?;
         self.expect(TokenKind::Delimiter(Delimiter::ParenOpen))?;
         let ty = self.parse_identty()?;
@@ -107,7 +83,35 @@ impl Parser<'_> {
         Ok(Field { ident, ty })
     }
 
-    pub fn parse_string(&mut self) -> anyhow::Result<LiteralString> {
+    pub fn parse_identty(&mut self) -> miette::Result<IdentTy> {
+        match self.next() {
+            Some(Token {
+                kind: TokenKind::Keyword(Keyword::Type(t)),
+                ..
+            }) => Ok(IdentTy::Type(t)),
+            Some(Token {
+                kind: TokenKind::Ident,
+                span,
+            }) => Ok(IdentTy::Ident(Ident(self.span_to_id(span)))),
+            Some(token) => Err(ParseError::UnexpectedType {
+                kind: token.kind,
+                span: token.span.into(),
+            }
+            .into()),
+            None => Err(ParseError::UnexpectedEofType {
+                end: (self.lexer.input.len().saturating_sub(1), 1).into(),
+            }
+            .into()),
+        }
+    }
+
+    pub fn parse_ident(&mut self) -> miette::Result<Ident> {
+        let token = self.expect(TokenKind::Ident)?;
+        let id = self.span_to_id(token.span);
+        Ok(Ident(id))
+    }
+
+    pub fn parse_string(&mut self) -> miette::Result<LiteralString> {
         let Token { kind: _kind, span } = self.expect(TokenKind::String)?;
         Ok(LiteralString(span))
     }

@@ -221,13 +221,15 @@ impl<'a> Lexer<'a, std::str::Chars<'a>> {
                         return self.produce_token(TokenKind::Operator(first), Some(self.at - 1));
                     }
                 },
-                State::Started(Started::String(start)) => {
-                    if ch != '"' {
-                        continue;
+                State::Started(Started::String(start)) => match ch {
+                    '"' => {
+                        self.state = State::Idle;
+                        return self.produce_token(TokenKind::String, Some(start));
                     }
-                    self.state = State::Idle;
-                    self.produce_token(TokenKind::String, Some(start));
-                }
+                    _ => {
+                        self.bump();
+                    }
+                },
                 State::Started(Started::Ident(start)) => match ch {
                     'a'..='z' | 'A'..='Z' | '0'..='9' | '_' => {
                         self.bump();

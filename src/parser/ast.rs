@@ -24,13 +24,13 @@ impl Intern<'_> {
 
 #[derive(Debug, Clone)]
 pub enum Item {
-    Packing(Packing),     //struct
-    Aor(Aor),             //enum
-    Procedure(Procedure), //fn
-    Methods(Methods),     //impl Struct
-    Api(Api),             //traits
-    Require(Require),     //impl trait
-    Get(Get),             // use
+    Packing(Packing),
+    Aor(Aor),
+    Procedure(Procedure),
+    Methods(Methods),
+    Api(Api),
+    Require(Require),
+    Get(Get),
 }
 
 #[derive(Debug, Clone)]
@@ -41,16 +41,27 @@ pub enum BlockItem {
     Item(Item),
     Stmt(Stmt),
 }
+#[derive(Debug, Clone)]
+pub enum S {
+    Atom(Atom),
+    Cons(Operator, Vec<S>),
+}
+#[derive(Debug, Clone)]
+pub enum Atom {
+    String(Span),
+    Ident(Span),
+    Number(Span),
+}
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Declaration {
         ty: IdentTy,
         var: Ident,
-        value: Expr,
+        value: S,
     },
     Seed {
-        return_value: Expr,
+        return_value: S,
     },
     Conditional {
         ifs: Conditional,
@@ -60,24 +71,21 @@ pub enum Stmt {
     For {
         ident: Ident,
         ty: IdentTy,
-        range: Option<(Expr, Expr, Option<Expr>)>,
+        range: Option<(S, S, Option<S>)>,
         block: Block,
     },
     While {
-        condition: Expr,
+        condition: S,
         block: Block,
     },
-    Expr(Expr),
+    Expr(S),
 }
 
 #[derive(Debug, Clone)]
 pub struct Conditional {
-    pub condition: Expr,
+    pub condition: S,
     pub block: Block,
 }
-
-#[derive(Debug, Clone)]
-pub struct Expr;
 
 #[derive(Debug, Clone)]
 pub struct Packing {

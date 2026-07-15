@@ -19,11 +19,33 @@ pub struct Span {
     pub end: u32,
 }
 
+impl From<Span> for miette::SourceSpan {
+    fn from(value: Span) -> Self {
+        Self::new(
+            (value.start as usize).into(),
+            #[allow(clippy::useless_conversion)]
+            ((value.end - value.start) as usize).into(),
+        )
+    }
+}
+
+pub fn from_spans(span1: Span, span2: Span) -> miette::SourceSpan {
+    miette::SourceSpan::new(
+        (span1.start as usize).into(),
+        #[allow(clippy::useless_conversion)]
+        ((span2.end - span1.start) as usize).into(),
+    )
+}
+
+/*---------------------------------------------------------------------------------------------------*/
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TokenKind {
     String,
     Ident,
+    //TODO: fix number
     Number,
+    //TODO: add %
     Operator(Operator),
     Keyword(Keyword),
     Punctuation(Punctuation),
@@ -52,6 +74,88 @@ pub enum Keyword {
     Api,
     Also,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Ty {
+    Signed(BitWidth),
+    Unsigned(BitWidth),
+    Float32,
+    Float64,
+    Arr,
+    HeapArr,
+    String,
+    HeapString,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BitWidth {
+    Byte,
+    Sixteen,
+    ThirtyTwo,
+    SixtyFour,
+    Word,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Operator {
+    BitwiseAnd,
+    BitwiseOr,
+    Not,
+    Assign,
+    Plus,
+    Minus,
+    Star,
+    ForwardSlash,
+    Dot,
+    Comparision(ComparisionOperator),
+    Logical(LogicalOperator),
+    CompoundAssign(CompoundAssignOperator),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Punctuation {
+    Semicolon,
+    Colon,
+    Comma,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Delimiter {
+    ParenOpen,
+    ParenClose,
+    SquareOpen,
+    SquareClose,
+    CurlyOpen,
+    CurlyClose,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ComparisionOperator {
+    LessThan,
+    GreaterThan,
+    LessEqual,
+    GreaterEqual,
+    Equal,
+    NotEqual,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum LogicalOperator {
+    And,
+    Or,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CompoundAssignOperator {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    And,
+    Or,
+}
+
+/*---------------------------------------------------------------------------------------------------*/
 
 impl<'a> TryFrom<&'a str> for Keyword {
     type Error = ();
@@ -93,27 +197,6 @@ impl<'a> TryFrom<&'a str> for Keyword {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Ty {
-    Signed(BitWidth),
-    Unsigned(BitWidth),
-    Float32,
-    Float64,
-    Arr,
-    HeapArr,
-    String,
-    HeapString,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum BitWidth {
-    Byte,
-    Sixteen,
-    ThirtyTwo,
-    SixtyFour,
-    Word,
-}
-
 impl TryFrom<u8> for BitWidth {
     type Error = u8;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
@@ -126,22 +209,6 @@ impl TryFrom<u8> for BitWidth {
         };
         Ok(b)
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Operator {
-    BitwiseAnd,
-    BitwiseOr,
-    Not,
-    Assign,
-    Plus,
-    Minus,
-    Star,
-    ForwardSlash,
-    Dot,
-    Comparision(ComparisionOperator),
-    Logical(LogicalOperator),
-    CompoundAssign(CompoundAssignOperator),
 }
 
 impl Operator {
@@ -181,13 +248,6 @@ impl TryFrom<char> for Operator {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Punctuation {
-    Semicolon,
-    Colon,
-    Comma,
-}
-
 impl TryFrom<char> for Punctuation {
     type Error = ();
     fn try_from(value: char) -> Result<Self, Self::Error> {
@@ -199,16 +259,6 @@ impl TryFrom<char> for Punctuation {
         };
         Ok(punct)
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Delimiter {
-    ParenOpen,
-    ParenClose,
-    SquareOpen,
-    SquareClose,
-    CurlyOpen,
-    CurlyClose,
 }
 
 impl TryFrom<char> for Delimiter {
@@ -226,23 +276,6 @@ impl TryFrom<char> for Delimiter {
         Ok(a)
     }
 }
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum ComparisionOperator {
-    LessThan,
-    GreaterThan,
-    LessEqual,
-    GreaterEqual,
-    Equal,
-    NotEqual,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum LogicalOperator {
-    And,
-    Or,
-}
-
 impl TryFrom<Operator> for LogicalOperator {
     type Error = ();
 
@@ -254,16 +287,6 @@ impl TryFrom<Operator> for LogicalOperator {
         };
         Ok(lop)
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum CompoundAssignOperator {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    And,
-    Or,
 }
 
 impl TryFrom<Operator> for CompoundAssignOperator {
@@ -279,5 +302,164 @@ impl TryFrom<Operator> for CompoundAssignOperator {
             _ => return Err(()),
         };
         Ok(caop)
+    }
+}
+
+/*---------------------------------------------------------------------------------------------------*/
+
+impl std::fmt::Display for TokenKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TokenKind::String => f.write_str("String Literal"),
+            TokenKind::Ident => f.write_str("Identifier"),
+            TokenKind::Number => f.write_str("Number"),
+            TokenKind::Operator(operator) => write!(f, "{operator}"),
+            TokenKind::Keyword(keyword) => write!(f, "{keyword}"),
+            TokenKind::Punctuation(punctuation) => write!(f, "{punctuation}"),
+            TokenKind::Delimiter(delimiter) => write!(f, "{delimiter}"),
+            TokenKind::Unknown => write!(f, "Unknown character"),
+            TokenKind::Eof => write!(f, "EOF"),
+        }
+    }
+}
+
+impl std::fmt::Display for Ty {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Ty::Signed(bit_width) => return write!(f, "i{bit_width}"),
+            Ty::Unsigned(bit_width) => return write!(f, "u{bit_width}"),
+            Ty::Float32 => "f32",
+            Ty::Float64 => "f64",
+            Ty::Arr => "arr",
+            Ty::HeapArr => "heaparr",
+            Ty::String => "string",
+            Ty::HeapString => "heapstring",
+        };
+        write!(f, "{s}")
+    }
+}
+
+impl std::fmt::Display for Keyword {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Keyword::Type(ty) => return write!(f, "{ty}"),
+            Keyword::If => "if",
+            Keyword::Else => "else",
+            Keyword::While => "while",
+            Keyword::For => "for",
+            Keyword::Proc => "proc",
+            Keyword::Seed => "seed",
+            Keyword::Get => "get",
+            Keyword::From => "from",
+            Keyword::In => "in",
+            Keyword::Range => "range",
+            Keyword::Methods => "methods",
+            Keyword::Require => "require",
+            Keyword::Aor => "aor",
+            Keyword::Packing => "packing",
+            Keyword::Api => "api",
+            Keyword::Also => "also",
+        };
+        write!(f, "{s}")
+    }
+}
+
+impl std::fmt::Display for BitWidth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            BitWidth::Byte => "8",
+            BitWidth::Sixteen => "16",
+            BitWidth::ThirtyTwo => "32",
+            BitWidth::SixtyFour => "64",
+            //TODO: word depends on the machine
+            BitWidth::Word => "64",
+        };
+        write!(f, "{s}")
+    }
+}
+impl std::fmt::Display for Operator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Operator::BitwiseAnd => "&",
+            Operator::BitwiseOr => "|",
+            Operator::Not => "!",
+            Operator::Assign => "=",
+            Operator::Plus => "+",
+            Operator::Minus => "-",
+            Operator::Star => "*",
+            Operator::ForwardSlash => "/",
+            Operator::Dot => ".",
+            Operator::Comparision(comparision_operator) => {
+                return write!(f, "{comparision_operator}");
+            }
+            Operator::Logical(logical_operator) => {
+                return write!(f, "{logical_operator}");
+            }
+            Operator::CompoundAssign(compound_assign_operator) => {
+                return write!(f, "{compound_assign_operator}");
+            }
+        };
+        write!(f, "{s}")
+    }
+}
+
+impl std::fmt::Display for ComparisionOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            ComparisionOperator::LessThan => "<",
+            ComparisionOperator::GreaterThan => ">",
+            ComparisionOperator::LessEqual => "<=",
+            ComparisionOperator::GreaterEqual => ">=",
+            ComparisionOperator::Equal => "==",
+            ComparisionOperator::NotEqual => "!=",
+        };
+        write!(f, "{s}")
+    }
+}
+
+impl std::fmt::Display for LogicalOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            LogicalOperator::And => "&&",
+            LogicalOperator::Or => "||",
+        };
+        write!(f, "{s}")
+    }
+}
+
+impl std::fmt::Display for CompoundAssignOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            CompoundAssignOperator::Add => "+=",
+            CompoundAssignOperator::Sub => "-=",
+            CompoundAssignOperator::Mul => "*=",
+            CompoundAssignOperator::Div => "/=",
+            CompoundAssignOperator::And => "&=",
+            CompoundAssignOperator::Or => "|=",
+        };
+        write!(f, "{s}")
+    }
+}
+impl std::fmt::Display for Punctuation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Punctuation::Semicolon => ";",
+            Punctuation::Colon => ":",
+            Punctuation::Comma => ",",
+        };
+        write!(f, "{s}")
+    }
+}
+impl std::fmt::Display for Delimiter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Delimiter::ParenOpen => "(",
+            Delimiter::ParenClose => ")",
+            Delimiter::SquareOpen => "[",
+            Delimiter::SquareClose => "]",
+            Delimiter::CurlyOpen => "{",
+            Delimiter::CurlyClose => "}",
+        };
+        write!(f, "{s}")
     }
 }

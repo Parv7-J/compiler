@@ -3,7 +3,7 @@ use super::ast::*;
 use crate::lexer::token::*;
 
 impl Parser<'_> {
-    pub fn parse_stmt(&mut self) -> anyhow::Result<Stmt> {
+    pub fn parse_stmt(&mut self) -> miette::Result<Stmt> {
         match self.peek() {
             Some(TokenKind::Keyword(Keyword::Type(_))) => self.parse_declaration(),
             Some(TokenKind::Keyword(Keyword::If)) => self.parse_conditional(),
@@ -14,7 +14,7 @@ impl Parser<'_> {
         }
     }
 
-    pub fn parse_declaration(&mut self) -> anyhow::Result<Stmt> {
+    pub fn parse_declaration(&mut self) -> miette::Result<Stmt> {
         let ty = self.parse_identty()?;
         let var = self.parse_ident()?;
         self.expect(TokenKind::Operator(Operator::Assign))?;
@@ -23,14 +23,14 @@ impl Parser<'_> {
         Ok(Stmt::Declaration { ty, var, value })
     }
 
-    pub fn parse_seed(&mut self) -> anyhow::Result<Stmt> {
+    pub fn parse_seed(&mut self) -> miette::Result<Stmt> {
         self.expect(TokenKind::Keyword(Keyword::Seed))?;
         let return_value = self.parse_expr()?;
         self.expect(TokenKind::Punctuation(Punctuation::Semicolon))?;
         Ok(Stmt::Seed { return_value })
     }
 
-    pub fn parse_conditional(&mut self) -> anyhow::Result<Stmt> {
+    pub fn parse_conditional(&mut self) -> miette::Result<Stmt> {
         self.expect(TokenKind::Keyword(Keyword::If))?;
         let condition = self.parse_expr()?;
         self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;
@@ -45,7 +45,7 @@ impl Parser<'_> {
         })
     }
 
-    pub fn parse_else(&mut self) -> anyhow::Result<(Vec<Conditional>, Option<Block>)> {
+    pub fn parse_else(&mut self) -> miette::Result<(Vec<Conditional>, Option<Block>)> {
         let mut elseifs = Vec::new();
         let mut elses = None;
         #[allow(clippy::while_let_loop)]
@@ -77,7 +77,7 @@ impl Parser<'_> {
         Ok((elseifs, elses))
     }
 
-    pub fn parse_for(&mut self) -> anyhow::Result<Stmt> {
+    pub fn parse_for(&mut self) -> miette::Result<Stmt> {
         self.expect(TokenKind::Keyword(Keyword::For))?;
         self.expect(TokenKind::Delimiter(Delimiter::ParenOpen))?;
         let ty = self.parse_identty()?;
@@ -112,7 +112,7 @@ impl Parser<'_> {
         }
     }
 
-    pub fn parse_while(&mut self) -> anyhow::Result<Stmt> {
+    pub fn parse_while(&mut self) -> miette::Result<Stmt> {
         self.expect(TokenKind::Keyword(Keyword::While))?;
         let condition = self.parse_expr()?;
         self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;

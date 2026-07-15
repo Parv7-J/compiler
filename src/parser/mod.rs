@@ -1,15 +1,14 @@
-#![allow(dead_code)]
-
-use anyhow::Context;
 use std::collections::hash_map::Entry;
 
 use crate::parser::ast::Ast;
 use crate::parser::ast::Intern;
 use crate::parser::ast::Item;
+use crate::parser::error::ParseError;
 use crate::{Lexer, lexer::token::*};
 
 mod ast;
 mod common;
+mod error;
 mod item;
 mod pratt;
 mod stmt;
@@ -29,11 +28,32 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(mut self) -> anyhow::Result<Ast<'a>> {
+    //TODO: should be a path
+    pub fn parse(mut self, fname: &str) -> miette::Result<Ast<'a>> {
         let mut items = Vec::new();
-        while let Some(kind) = self.peek() {
-            if let TokenKind::Keyword(_) = kind {
-                items.push(self.parse_item().context("Parsing top level items")?);
+        loop {
+            match self.peek() {
+                Some(TokenKind::Keyword(_)) => {
+                    items.push(self.parse_item().map_err(|e| {
+                        e.with_source_code(miette::NamedSource::new(
+                            fname,
+                            self.lexer.input.to_string(),
+                        ))
+                    })?);
+                }
+                Some(_) => {
+                    let Token { kind, span } = self.next().expect("peeked and got some");
+                    return Err(miette::Report::from(ParseError::TopLevelNonItem {
+                        kind,
+                        span: span.into(),
+                    })
+                    //TODO: remove this expensive allocation
+                    .with_source_code(miette::NamedSource::new(
+                        fname,
+                        self.lexer.input.to_string(),
+                    )));
+                }
+                None => break,
             }
         }
 
@@ -62,7 +82,7 @@ impl<'a> Parser<'a> {
         None
     }
 
-    fn parse_item(&mut self) -> anyhow::Result<Item> {
+    fn parse_item(&mut self) -> miette::Result<Item> {
         let item = match self
             .peek()
             .expect("only called by parse and parse_block, which already checks if there is a token present")
@@ -74,19 +94,25 @@ impl<'a> Parser<'a> {
             TokenKind::Keyword(Keyword::Aor) => Item::Aor(self.parse_aor()?),
             TokenKind::Keyword(Keyword::Packing) => Item::Packing(self.parse_packing()?),
             TokenKind::Keyword(Keyword::Api) => Item::Api(self.parse_api()?),
-            kind => anyhow::bail!("Expected top level item keyword, Found: {kind:?}"),
+            kind => return Err(ParseError::TopLevelNonItem {kind, span: self.next().unwrap().span.into() }.into())
         };
         Ok(item)
     }
 
-    fn expect(&mut self, kind: TokenKind) -> anyhow::Result<Token> {
+    fn expect(&mut self, kind: TokenKind) -> miette::Result<Token> {
         match self.next() {
             Some(token) if token.kind == kind => Ok(token),
-            Some(token) => Err(anyhow::anyhow!(
-                "Expected Kind: {kind:?}, Found: {:?}",
-                token.kind
-            )),
-            None => Err(anyhow::anyhow!("Expected Kind: {kind:?}, Reached EOF")),
+            Some(token) => Err(ParseError::UnexpectedToken {
+                kind: token.kind,
+                span: token.span.into(),
+                expected: kind,
+            }
+            .into()),
+            None => Err(ParseError::UnexpectedEof {
+                kind,
+                end: (self.lexer.input.len().saturating_sub(1), 1).into(),
+            }
+            .into()),
         }
     }
     fn span_to_id(&mut self, span: Span) -> usize {

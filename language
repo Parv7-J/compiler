@@ -1,5 +1,6 @@
+get hello from "hello";
 proc foo[a(i32),b(u32)] : i32 {
-    if {
+    if 2+2*2 {
         while {
 
         }
@@ -13,8 +14,6 @@ packing Foo {
     a(i32),
     b(usize),
     c(u32)
-}
-methods Foo {
 }
 api Send also Sync {
     proc foo[a(i32),b(u32)] : i32 {
