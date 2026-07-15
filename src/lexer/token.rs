@@ -215,7 +215,7 @@ impl Operator {
     pub fn suffix_equal(self) -> Option<Operator> {
         let new_op = match self {
             Operator::Not => Operator::Comparision(ComparisionOperator::NotEqual),
-            Operator::Comparision(ComparisionOperator::Equal) => Operator::Assign,
+            Operator::Assign => Operator::Comparision(ComparisionOperator::Equal),
             Operator::Comparision(ComparisionOperator::LessThan) => {
                 Operator::Comparision(ComparisionOperator::LessEqual)
             }

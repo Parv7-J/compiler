@@ -33,6 +33,7 @@ impl Parser<'_> {
     pub fn parse_conditional(&mut self) -> miette::Result<Stmt> {
         self.expect(TokenKind::Keyword(Keyword::If))?;
         let condition = self.parse_expr()?;
+        println!("condition: {condition:?}");
         self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;
         let block = self.parse_block()?;
         self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;

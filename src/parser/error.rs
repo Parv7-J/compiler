@@ -42,4 +42,15 @@ pub enum ParseError {
         #[label("expected type")]
         end: SourceSpan,
     },
+    #[error("Unexpected Expr")]
+    UnexpectedExpr {
+        kind: TokenKind,
+        #[label("expected expression found {kind}")]
+        span: SourceSpan,
+    },
+    #[error("Unexpected EOF")]
+    UnexpectedEofExpr {
+        #[label("expected expression")]
+        end: SourceSpan,
+    },
 }

@@ -49,7 +49,7 @@ pub enum S {
 #[derive(Debug, Clone)]
 pub enum Atom {
     String(Span),
-    Ident(Span),
+    Ident(usize),
     Number(Span),
 }
 

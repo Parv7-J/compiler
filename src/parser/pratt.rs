@@ -1,6 +1,7 @@
 use super::Parser;
 use super::ast::*;
 use crate::lexer::token::*;
+use crate::parser::error::ParseError;
 
 //TODO: add tokens: char, '', break, continue,
 // #[derive(Clone, Copy, Debug, PartialEq)]
@@ -55,47 +56,72 @@ use crate::lexer::token::*;
 
 impl Parser<'_> {
     pub fn parse_exprstmt(&mut self) -> miette::Result<Stmt> {
-        let expr = self.parse_expr()?;
+        //allow assignments inside expression statements
+        let expr = self.expr_bp(0)?;
+        println!("{expr:#?}");
         self.expect(TokenKind::Punctuation(Punctuation::Semicolon))?;
         Ok(Stmt::Expr(expr))
     }
 
     pub fn parse_expr(&mut self) -> miette::Result<S> {
-        Ok(self.expr_bp(0))
+        let expr = self.expr_bp(3)?;
+        println!("{expr:#?}");
+        Ok(expr)
     }
 
-    fn expr_bp(&mut self, min_bp: u8) -> S {
-        let mut lhs = match self.peek() {
-            Some(TokenKind::String | TokenKind::Ident | TokenKind::Number) => {
-                S::Atom(self.next().unwrap().into())
+    fn expr_bp(&mut self, mut min_bp: u8) -> miette::Result<S> {
+        let token = match self.next() {
+            Some(token) => token,
+            None => {
+                return Err(ParseError::UnexpectedEofExpr {
+                    end: (self.lexer.input.len().saturating_sub(1), 1).into(),
+                }
+                .into());
             }
-            Some(TokenKind::Operator(op)) => {
+        };
+        let mut lhs = match token.kind {
+            TokenKind::Delimiter(Delimiter::ParenOpen) => {
+                let inner_expr = self.parse_expr()?;
+                self.expect(TokenKind::Delimiter(Delimiter::ParenClose))?;
+                inner_expr
+            }
+            TokenKind::Ident => {
+                let id = self.span_to_id(token.span);
+                S::Atom(Atom::Ident(id))
+            }
+            TokenKind::String | TokenKind::Number => S::Atom(token.into()),
+            TokenKind::Operator(op) => {
                 let ((), r_bp) = prefix_binding_power(op).unwrap();
-                self.next();
-                let rhs = self.expr_bp(r_bp);
+                let rhs = self.expr_bp(r_bp)?;
                 S::Cons(op, vec![rhs])
             }
-            _ => panic!("bad token"),
+            kind => {
+                return Err(ParseError::UnexpectedExpr {
+                    kind,
+                    span: token.span.into(),
+                }
+                .into());
+            }
         };
 
-        #[allow(clippy::all)]
-        loop {
-            match self.peek() {
-                Some(TokenKind::Operator(op)) => {
-                    let (l_bp, r_bp) = infix_binding_power(op).unwrap();
-                    if l_bp < min_bp {
-                        break;
-                    } else {
-                        self.next();
-                        let rhs = self.expr_bp(r_bp);
-                        lhs = S::Cons(op, vec![lhs, rhs]);
-                    }
+        while let Some(TokenKind::Operator(op)) = self.peek() {
+            let (l_bp, mut r_bp) = infix_binding_power(op).unwrap();
+            if l_bp < min_bp {
+                break;
+            }
+            match op {
+                Operator::Assign | Operator::CompoundAssign(_) => {
+                    min_bp = 3;
+                    r_bp = r_bp.max(min_bp);
                 }
-                _ => todo!(),
-            };
+                _ => {}
+            }
+            self.next();
+            let rhs = self.expr_bp(r_bp)?;
+            lhs = S::Cons(op, vec![lhs, rhs]);
         }
 
-        lhs
+        Ok(lhs)
     }
 }
 
@@ -103,53 +129,44 @@ impl From<Token> for Atom {
     fn from(value: Token) -> Self {
         match value.kind {
             TokenKind::String => Atom::String(value.span),
-            TokenKind::Ident => Atom::Ident(value.span),
             TokenKind::Number => Atom::Number(value.span),
             _ => unreachable!(),
         }
     }
 }
 
-//idents, and number and string
-
 fn infix_binding_power(op: Operator) -> Option<(u8, u8)> {
-    let p = match op {
-        Operator::BitwiseAnd => todo!(),
-        Operator::BitwiseOr => todo!(),
-        Operator::Assign => todo!(),
-        Operator::Plus => (1, 2),
-        Operator::Minus => todo!(),
-        Operator::Star => (3, 4),
-        Operator::ForwardSlash => todo!(),
-        Operator::Dot => todo!(),
-        Operator::Comparision(comparision_operator) => todo!(),
-        Operator::Logical(logical_operator) => todo!(),
-        Operator::CompoundAssign(compound_assign_operator) => todo!(),
-        _ => return None,
-    };
-    Some(p)
-}
-
-fn prefix_binding_power(op: Operator) -> Option<((), u8)> {
     match op {
-        Operator::Not => todo!(),
-        Operator::Minus => todo!(),
-        Operator::Star => todo!(),
+        Operator::Dot => Some((19, 20)),
+        Operator::Star | Operator::ForwardSlash => Some((15, 16)),
+        Operator::Plus | Operator::Minus => Some((13, 14)),
+        Operator::Comparision(_) => Some((11, 12)),
+        Operator::BitwiseAnd => Some((9, 10)),
+        Operator::BitwiseOr => Some((7, 8)),
+        Operator::Logical(LogicalOperator::And) => Some((5, 6)),
+        Operator::Logical(LogicalOperator::Or) => Some((3, 4)),
+        Operator::Assign | Operator::CompoundAssign(_) => Some((2, 1)),
         _ => None,
     }
 }
 
-fn posfix_binding_power(delim: Delimiter) -> Option<(u8, ())> {
-    //a(parse_args) -> function call, a[parse_expr] -> array access
-    //[parse_expr in a loop] -> array literal, "parse_string" -> string literal
-    //'parse_char' -> char literal, (parse_expr) -> expression or (parse_expr in a loop,) -> tuple
-    //a { parse_field } -> postfix op
-    match delim {
-        Delimiter::ParenOpen => todo!(),
-        Delimiter::ParenClose => todo!(),
-        Delimiter::SquareOpen => todo!(),
-        Delimiter::SquareClose => todo!(),
-        Delimiter::CurlyOpen => todo!(),
-        Delimiter::CurlyClose => todo!(),
+fn prefix_binding_power(op: Operator) -> Option<((), u8)> {
+    match op {
+        Operator::Not | Operator::Minus => Some(((), 17)),
+        //TODO: allow pointers
+        // Operator::Star => todo!(),
+        _ => None,
     }
 }
+
+// fn posfix_binding_power(delim: Delimiter) -> Option<(u8, ())> {
+//     //a(parse_args) -> function call, a[parse_expr] -> array access
+//     //[parse_expr in a loop] -> array literal, "parse_string" -> string literal
+//     //'parse_char' -> char literal, (parse_expr) -> expression or (parse_expr in a loop,) -> tuple
+//     //a { parse_field } -> postfix op
+//     match delim {
+//         Delimiter::ParenOpen |
+//         Delimiter::SquareOpen => Some((19))
+//         Delimiter::CurlyOpen => todo!(),
+//     }
+// }
