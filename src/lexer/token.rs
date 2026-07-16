@@ -58,8 +58,15 @@ pub enum TokenKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Boolean {
+    True,
+    False,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Keyword {
     Type(Ty),
+    Boolean(Boolean),
     If,
     Else,
     While,
@@ -76,6 +83,8 @@ pub enum Keyword {
     Packing,
     Api,
     Also,
+    Break,
+    Continue,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -89,6 +98,7 @@ pub enum Ty {
     String,
     HeapString,
     Char,
+    Bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -171,6 +181,8 @@ impl<'a> TryFrom<&'a str> for Keyword {
             "u8" | "u16" | "u32" | "u64" => Self::Type(Ty::Unsigned(
                 BitWidth::try_from(value[1..].parse::<u8>().unwrap()).unwrap(),
             )),
+            "true" => Self::Boolean(Boolean::True),
+            "false" => Self::Boolean(Boolean::False),
             "isize" => Self::Type(Ty::Signed(BitWidth::Word)),
             "usize" => Self::Type(Ty::Unsigned(BitWidth::Word)),
             "f32" => Self::Type(Ty::Float32),
@@ -196,6 +208,8 @@ impl<'a> TryFrom<&'a str> for Keyword {
             "packing" => Self::Packing,
             "api" => Self::Api,
             "also" => Self::Also,
+            "break" => Self::Break,
+            "continue" => Self::Continue,
             _ => return Err(()),
         };
         Ok(k)
@@ -329,6 +343,16 @@ impl std::fmt::Display for TokenKind {
     }
 }
 
+impl std::fmt::Display for Boolean {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Boolean::True => "true",
+            Boolean::False => "false",
+        };
+        write!(f, "{s}")
+    }
+}
+
 impl std::fmt::Display for Ty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
@@ -341,6 +365,7 @@ impl std::fmt::Display for Ty {
             Ty::String => "string",
             Ty::HeapString => "heapstring",
             Ty::Char => "char",
+            Ty::Bool => "bool",
         };
         write!(f, "{s}")
     }
@@ -366,6 +391,9 @@ impl std::fmt::Display for Keyword {
             Keyword::Packing => "packing",
             Keyword::Api => "api",
             Keyword::Also => "also",
+            Keyword::Break => "break",
+            Keyword::Continue => "continue",
+            Keyword::Boolean(boolean) => return write!(f, "{boolean}"),
         };
         write!(f, "{s}")
     }

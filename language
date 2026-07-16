@@ -1,4 +1,4 @@
-proc a[]: i32 {
-    i32 b = 1;
-    *i32 a = &b;
+proc foo[] {
+    arr[i32] a = [1,2,3];
+    foo(a[1]);
 }

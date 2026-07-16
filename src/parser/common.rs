@@ -50,7 +50,7 @@ impl Parser<'_> {
         Ok(Block(block))
     }
 
-    pub fn parse_range(&mut self) -> miette::Result<(S, S, Option<S>)> {
+    pub fn parse_range(&mut self) -> miette::Result<(Expr, Expr, Option<Expr>)> {
         let start = self.parse_expr()?;
         self.expect(TokenKind::Punctuation(Punctuation::Comma))?;
         let end = self.parse_expr()?;

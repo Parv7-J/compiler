@@ -1,3 +1,5 @@
+//TODO: tuple types, hand initializing structs
+
 use super::Parser;
 use super::ast::*;
 use crate::lexer::token::*;
@@ -7,18 +9,18 @@ impl Parser<'_> {
     pub fn parse_exprstmt(&mut self) -> miette::Result<Stmt> {
         //allow assignments inside expression statements
         let expr = self.expr_bp(0)?;
-        println!("{expr:#?}");
+        // println!("{expr:#?}");
         self.expect(TokenKind::Punctuation(Punctuation::Semicolon))?;
         Ok(Stmt::Expr(expr))
     }
 
-    pub fn parse_expr(&mut self) -> miette::Result<S> {
+    pub fn parse_expr(&mut self) -> miette::Result<Expr> {
         let expr = self.expr_bp(3)?;
-        println!("{expr:#?}");
+        // println!("{expr:#?}");
         Ok(expr)
     }
 
-    fn expr_bp(&mut self, mut min_bp: u8) -> miette::Result<S> {
+    fn expr_bp(&mut self, mut min_bp: u8) -> miette::Result<Expr> {
         let token = match self.next() {
             Some(token) => token,
             None => {
@@ -34,18 +36,42 @@ impl Parser<'_> {
                 self.expect(TokenKind::Delimiter(Delimiter::ParenClose))?;
                 inner_expr
             }
+            TokenKind::Delimiter(Delimiter::SquareOpen) => {
+                let mut arr = Vec::new();
+                loop {
+                    if self.peek().is_none()
+                        || self.peek() == Some(TokenKind::Delimiter(Delimiter::SquareClose))
+                    {
+                        break;
+                    }
+                    arr.push(self.parse_expr()?);
+                    if self.peek() != Some(TokenKind::Punctuation(Punctuation::Comma)) {
+                        break;
+                    }
+                    self.expect(TokenKind::Punctuation(Punctuation::Comma))
+                        .expect("already checked for comma");
+                }
+                self.expect(TokenKind::Delimiter(Delimiter::SquareClose))?;
+                Expr::List(arr)
+            }
             TokenKind::Ident => {
                 let id = self.span_to_id(token.span);
-                S::Atom(Atom::Ident(SpannedIdent {
+                Expr::Atom(Atom::Ident(SpannedIdent {
                     id,
                     span: token.span,
                 }))
             }
-            TokenKind::String | TokenKind::Number => S::Atom(token.into()),
+            TokenKind::Keyword(Keyword::Boolean(boolean)) => {
+                Expr::Atom(Atom::Boolean(SpannedBoolean {
+                    boolean,
+                    span: token.span,
+                }))
+            }
+            TokenKind::String | TokenKind::Number => Expr::Atom(token.into()),
             TokenKind::Operator(op) => {
                 let ((), r_bp) = prefix_binding_power(op).unwrap();
                 let rhs = self.expr_bp(r_bp)?;
-                S::Cons(
+                Expr::Cons(
                     SpannedOperator {
                         op,
                         span: token.span,
@@ -62,22 +88,66 @@ impl Parser<'_> {
             }
         };
 
-        while let Some(TokenKind::Operator(op)) = self.peek() {
-            let (l_bp, mut r_bp) = infix_binding_power(op).unwrap();
-            if l_bp < min_bp {
-                break;
-            }
-            match op {
-                Operator::Assign | Operator::CompoundAssign(_) => {
-                    min_bp = 3;
-                    r_bp = r_bp.max(min_bp);
+        while let Some(kind) = self.peek() {
+            match kind {
+                TokenKind::Operator(op) => {
+                    let (l_bp, mut r_bp) = infix_binding_power(op).unwrap();
+                    if l_bp < min_bp {
+                        break;
+                    }
+                    match op {
+                        Operator::Assign | Operator::CompoundAssign(_) => {
+                            min_bp = 3;
+                            r_bp = r_bp.max(min_bp);
+                        }
+                        _ => {}
+                    }
+                    let t = self.next().unwrap();
+                    let rhs = self.expr_bp(r_bp)?;
+                    lhs = Expr::Cons(SpannedOperator { op, span: t.span }, vec![lhs, rhs]);
                 }
-                _ => {}
+                TokenKind::Delimiter(delim) => {
+                    if delim == Delimiter::ParenOpen {
+                        println!("here fam");
+                        let l_bp = 19;
+                        if l_bp < min_bp {
+                            break;
+                        }
+                        self.next().unwrap();
+                        let mut arr = Vec::new();
+                        loop {
+                            if self.peek().is_none()
+                                || self.peek() == Some(TokenKind::Delimiter(Delimiter::ParenClose))
+                            {
+                                break;
+                            }
+                            arr.push(self.parse_expr()?);
+                            if self.peek() != Some(TokenKind::Punctuation(Punctuation::Comma)) {
+                                break;
+                            }
+                            self.expect(TokenKind::Punctuation(Punctuation::Comma))?;
+                        }
+                        self.expect(TokenKind::Delimiter(Delimiter::ParenClose))?;
+                        lhs = Expr::Call(vec![lhs, Expr::List(arr)]);
+                    }
+
+                    let (l_bp, expected_kind) = match delim {
+                        Delimiter::SquareOpen => (19, TokenKind::Delimiter(Delimiter::SquareClose)),
+                        _ => break,
+                    };
+                    if l_bp < min_bp {
+                        break;
+                    }
+                    //access should have exactly one expr
+                    self.next().unwrap();
+                    let expr = self.parse_expr()?;
+                    self.expect(expected_kind)?;
+                    lhs = Expr::Access(vec![lhs, expr]);
+                }
+                _ => break,
             }
-            let t = self.next().unwrap();
-            let rhs = self.expr_bp(r_bp)?;
-            lhs = S::Cons(SpannedOperator { op, span: t.span }, vec![lhs, rhs]);
         }
+
         Ok(lhs)
     }
 }
@@ -113,15 +183,3 @@ fn prefix_binding_power(op: Operator) -> Option<((), u8)> {
         _ => None,
     }
 }
-
-// fn posfix_binding_power(delim: Delimiter) -> Option<(u8, ())> {
-//     //a(parse_args) -> function call, a[parse_expr] -> array access
-//     //[parse_expr in a loop] -> array literal, "parse_string" -> string literal
-//     //'parse_char' -> char literal, (parse_expr) -> expression or (parse_expr in a loop,) -> tuple
-//     //a { parse_field } -> postfix op
-//     match delim {
-//         Delimiter::ParenOpen |
-//         Delimiter::SquareOpen => Some((19))
-//         Delimiter::CurlyOpen => todo!(),
-//     }
-// }

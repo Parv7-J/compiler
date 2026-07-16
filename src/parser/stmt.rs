@@ -9,6 +9,16 @@ impl Parser<'_> {
             Some(TokenKind::Keyword(Keyword::For)) => self.parse_for(),
             Some(TokenKind::Keyword(Keyword::While)) => self.parse_while(),
             Some(TokenKind::Keyword(Keyword::Seed)) => self.parse_seed(),
+            Some(TokenKind::Keyword(Keyword::Break)) => {
+                let token = self.next().unwrap();
+                self.expect(TokenKind::Punctuation(Punctuation::Semicolon))?;
+                Ok(Stmt::Break(token.span))
+            }
+            Some(TokenKind::Keyword(Keyword::Continue)) => {
+                let token = self.next().unwrap();
+                self.expect(TokenKind::Punctuation(Punctuation::Semicolon))?;
+                Ok(Stmt::Continue(token.span))
+            }
             _ => self.parse_dec_or_exprstmt(),
         }
     }

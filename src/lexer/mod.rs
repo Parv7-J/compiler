@@ -126,7 +126,7 @@ impl<'a> Lexer<'a, std::str::Chars<'a>> {
                         self.state = State::Idle;
                         return self.produce_token(TokenKind::Unknown, Some(start));
                     }
-                    State::Started(Started::Char(start, got)) => {
+                    State::Started(Started::Char(start, _)) => {
                         self.state = State::Idle;
                         return self.produce_token(TokenKind::Unknown, Some(start));
                     }

@@ -42,9 +42,12 @@ pub enum BlockItem {
     Stmt(Stmt),
 }
 #[derive(Debug, Clone)]
-pub enum S {
+pub enum Expr {
     Atom(Atom),
-    Cons(SpannedOperator, Vec<S>),
+    Cons(SpannedOperator, Vec<Expr>),
+    List(Vec<Expr>),
+    Call(Vec<Expr>),
+    Access(Vec<Expr>),
 }
 
 #[derive(Debug, Clone)]
@@ -58,6 +61,13 @@ pub enum Atom {
     String(Span),
     Ident(SpannedIdent),
     Number(Span),
+    Boolean(SpannedBoolean),
+}
+
+#[derive(Debug, Clone)]
+pub struct SpannedBoolean {
+    pub boolean: Boolean,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]
@@ -65,10 +75,10 @@ pub enum Stmt {
     Declaration {
         ty: IdentTy,
         var: SpannedIdent,
-        value: S,
+        value: Expr,
     },
     Seed {
-        return_value: S,
+        return_value: Expr,
     },
     Conditional {
         ifs: Conditional,
@@ -78,14 +88,16 @@ pub enum Stmt {
     For {
         ty: SpannedTy,
         ident: SpannedIdent,
-        range: Option<(S, S, Option<S>)>,
+        range: Option<(Expr, Expr, Option<Expr>)>,
         block: Block,
     },
     While {
-        condition: S,
+        condition: Expr,
         block: Block,
     },
-    Expr(S),
+    Break(Span),
+    Continue(Span),
+    Expr(Expr),
 }
 
 #[derive(Debug, Clone)]
@@ -96,7 +108,7 @@ pub struct SpannedTy {
 
 #[derive(Debug, Clone)]
 pub struct Conditional {
-    pub condition: S,
+    pub condition: Expr,
     pub block: Block,
 }
 
