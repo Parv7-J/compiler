@@ -5,13 +5,36 @@ use crate::lexer::token::*;
 impl Parser<'_> {
     pub fn parse_stmt(&mut self) -> miette::Result<Stmt> {
         match self.peek() {
-            Some(TokenKind::Keyword(Keyword::Type(_))) => self.parse_declaration(),
             Some(TokenKind::Keyword(Keyword::If)) => self.parse_conditional(),
             Some(TokenKind::Keyword(Keyword::For)) => self.parse_for(),
             Some(TokenKind::Keyword(Keyword::While)) => self.parse_while(),
             Some(TokenKind::Keyword(Keyword::Seed)) => self.parse_seed(),
-            _ => self.parse_exprstmt(),
+            _ => self.parse_dec_or_exprstmt(),
         }
+    }
+
+    pub fn parse_dec_or_exprstmt(&mut self) -> miette::Result<Stmt> {
+        let tokenlist = self.lexer.clone();
+        for token in tokenlist {
+            match token.kind {
+                TokenKind::Operator(Operator::Assign) => {
+                    return self.parse_declaration();
+                }
+                TokenKind::Punctuation(Punctuation::Semicolon) => {
+                    return self.parse_exprstmt();
+                }
+                _ => {}
+            }
+        }
+        //failed to find a semi or an assign -> stream ended
+        todo!("failed to find a semi or an assign -> stream ended")
+        //Header header = 1; -> dec
+        //*Header header = 2; -> dec
+        //Header(); -> exprstmt
+        //header += 1; -> exprstmt
+        //*header += 1; -> exprstmt
+        //problem is both are prefixed by idents, or *
+        //i think i should walk till ; and find if there is an assign operator
     }
 
     pub fn parse_declaration(&mut self) -> miette::Result<Stmt> {

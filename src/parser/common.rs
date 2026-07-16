@@ -93,6 +93,7 @@ impl Parser<'_> {
                     span: token.span,
                 }))
             }
+            Some(TokenKind::Operator(Operator::Star)) => Ok(IdentTy::Ptr(self.parse_ptr()?)),
             Some(_) => {
                 let token = self.next().unwrap();
                 Err(ParseError::UnexpectedType {
@@ -106,6 +107,15 @@ impl Parser<'_> {
             }
             .into()),
         }
+    }
+
+    fn parse_ptr(&mut self) -> miette::Result<SpannedPtr> {
+        let star = self.expect(TokenKind::Operator(Operator::Star))?;
+        let ty = self.parse_identty()?;
+        Ok(SpannedPtr {
+            ptr: star.span,
+            ty: Box::new(ty),
+        })
     }
 
     fn parse_arr(&mut self) -> miette::Result<SpannedArr> {

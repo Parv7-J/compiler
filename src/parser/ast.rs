@@ -143,6 +143,13 @@ pub enum IdentTy {
     Type(SpannedTy),
     Ident(SpannedIdent),
     Arr(SpannedArr),
+    Ptr(SpannedPtr),
+}
+
+#[derive(Debug, Clone)]
+pub struct SpannedPtr {
+    pub ptr: Span,
+    pub ty: Box<IdentTy>,
 }
 
 #[derive(Debug, Clone)]
