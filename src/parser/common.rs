@@ -67,7 +67,7 @@ impl Parser<'_> {
     pub fn parse_variant(&mut self) -> miette::Result<Variant> {
         let ident = self.parse_ident()?;
         if self.peek() != Some(TokenKind::Delimiter(Delimiter::ParenOpen)) {
-            return Ok(Variant::Ident(ident));
+            return Ok(Variant::SpannedIdent(ident));
         }
         self.next();
         let ty = self.parse_identty()?;
@@ -84,20 +84,23 @@ impl Parser<'_> {
     }
 
     pub fn parse_identty(&mut self) -> miette::Result<IdentTy> {
-        match self.next() {
-            Some(Token {
-                kind: TokenKind::Keyword(Keyword::Type(t)),
-                ..
-            }) => Ok(IdentTy::Type(t)),
-            Some(Token {
-                kind: TokenKind::Ident,
-                span,
-            }) => Ok(IdentTy::Ident(Ident(self.span_to_id(span)))),
-            Some(token) => Err(ParseError::UnexpectedType {
-                kind: token.kind,
-                span: token.span.into(),
+        match self.peek() {
+            Some(TokenKind::Keyword(Keyword::Type(_))) => self.parse_anyty(),
+            Some(TokenKind::Ident) => {
+                let token = self.expect(TokenKind::Ident)?;
+                Ok(IdentTy::Ident(SpannedIdent {
+                    id: self.span_to_id(token.span),
+                    span: token.span,
+                }))
             }
-            .into()),
+            Some(_) => {
+                let token = self.next().unwrap();
+                Err(ParseError::UnexpectedType {
+                    kind: token.kind,
+                    span: token.span.into(),
+                }
+                .into())
+            }
             None => Err(ParseError::UnexpectedEofType {
                 end: (self.lexer.input.len().saturating_sub(1), 1).into(),
             }
@@ -105,10 +108,60 @@ impl Parser<'_> {
         }
     }
 
-    pub fn parse_ident(&mut self) -> miette::Result<Ident> {
+    fn parse_arr(&mut self) -> miette::Result<SpannedArr> {
+        let arr = match self.next().unwrap() {
+            Token {
+                kind: TokenKind::Keyword(Keyword::Type(ty)),
+                span,
+            } => (ty, span),
+            _ => unreachable!(),
+        };
+        self.expect(TokenKind::Delimiter(Delimiter::SquareOpen))?;
+        let inner_ty = self.parse_identty()?;
+        self.expect(TokenKind::Delimiter(Delimiter::SquareClose))?;
+        Ok(SpannedArr {
+            ty: arr.0,
+            inner_ty: Box::new(inner_ty),
+            span: arr.1,
+        })
+    }
+
+    pub fn parse_ident(&mut self) -> miette::Result<SpannedIdent> {
         let token = self.expect(TokenKind::Ident)?;
         let id = self.span_to_id(token.span);
-        Ok(Ident(id))
+        Ok(SpannedIdent {
+            id,
+            span: token.span,
+        })
+    }
+
+    pub fn parse_anyty(&mut self) -> miette::Result<IdentTy> {
+        let TokenKind::Keyword(Keyword::Type(ty)) = self.peek().unwrap() else {
+            unreachable!()
+        };
+
+        Ok(match ty {
+            Ty::Arr | Ty::HeapArr => IdentTy::Arr(self.parse_arr()?),
+            _ => IdentTy::Type(self.parse_ty()?),
+        })
+    }
+
+    pub fn parse_ty(&mut self) -> miette::Result<SpannedTy> {
+        match self.next() {
+            Some(Token {
+                kind: TokenKind::Keyword(Keyword::Type(ty)),
+                span,
+            }) => Ok(SpannedTy { ty, span }),
+            Some(t) => Err(ParseError::UnexpectedType {
+                kind: t.kind,
+                span: t.span.into(),
+            }
+            .into()),
+            None => Err(ParseError::UnexpectedEofType {
+                end: (self.lexer.input.len().saturating_sub(1), 1).into(),
+            }
+            .into()),
+        }
     }
 
     pub fn parse_string(&mut self) -> miette::Result<LiteralString> {

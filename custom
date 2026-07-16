@@ -1,4 +1,3 @@
-get print,ptr,heap,range,copy;
 get hello from "hello";
 
 proc foo[a(i32),b(u32)] : i32 {
@@ -30,18 +29,17 @@ proc bar[f1(*i32), f2(*i32)] {
 
 
     i32 a = 1;
-    i32 c = heaparr.foo(copy a);
+    i32 c = heaparr.foo(a);
 
     for (string s) in a {
         print s;
     }
 
-    me mestruct = me::hey[];
+    me mestruct = me[] 
     me;
 
 
     heapstring s = "%f1 %f2";
-    print *s;
 }
 
 packing me {
@@ -49,7 +47,8 @@ packing me {
 }
 
 methods me {
-    proc hey[]: me {
+    proc init[]: me{
+
     }
 }
 

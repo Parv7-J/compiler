@@ -44,12 +44,19 @@ pub enum BlockItem {
 #[derive(Debug, Clone)]
 pub enum S {
     Atom(Atom),
-    Cons(Operator, Vec<S>),
+    Cons(SpannedOperator, Vec<S>),
 }
+
+#[derive(Debug, Clone)]
+pub struct SpannedOperator {
+    pub op: Operator,
+    pub span: Span,
+}
+
 #[derive(Debug, Clone)]
 pub enum Atom {
     String(Span),
-    Ident(usize),
+    Ident(SpannedIdent),
     Number(Span),
 }
 
@@ -57,7 +64,7 @@ pub enum Atom {
 pub enum Stmt {
     Declaration {
         ty: IdentTy,
-        var: Ident,
+        var: SpannedIdent,
         value: S,
     },
     Seed {
@@ -69,8 +76,8 @@ pub enum Stmt {
         elses: Option<Block>,
     },
     For {
-        ident: Ident,
-        ty: IdentTy,
+        ty: SpannedTy,
+        ident: SpannedIdent,
         range: Option<(S, S, Option<S>)>,
         block: Block,
     },
@@ -82,6 +89,12 @@ pub enum Stmt {
 }
 
 #[derive(Debug, Clone)]
+pub struct SpannedTy {
+    pub ty: Ty,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
 pub struct Conditional {
     pub condition: S,
     pub block: Block,
@@ -89,48 +102,59 @@ pub struct Conditional {
 
 #[derive(Debug, Clone)]
 pub struct Packing {
-    pub ident: Ident,
+    pub ident: SpannedIdent,
     pub fields: Vec<Field>,
 }
 #[derive(Debug, Clone)]
 pub struct Aor {
-    pub ident: Ident,
+    pub ident: SpannedIdent,
     pub variants: Vec<Variant>,
 }
 
 #[derive(Debug, Clone)]
 pub enum Variant {
     Field(Field),
-    Ident(Ident),
+    SpannedIdent(SpannedIdent),
 }
 
 #[derive(Debug, Clone)]
 pub struct Field {
-    pub ident: Ident,
+    pub ident: SpannedIdent,
     pub ty: IdentTy,
 }
 
 #[derive(Debug, Clone)]
-pub struct Ident(pub usize);
+pub struct SpannedIdent {
+    pub id: usize,
+    pub span: Span,
+}
 
 #[derive(Debug, Clone)]
 pub struct LiteralString(pub Span);
 
 #[derive(Debug, Clone)]
 pub struct Get {
-    pub imports: Vec<Ident>,
+    pub imports: Vec<SpannedIdent>,
     pub module: LiteralString,
 }
 
 #[derive(Debug, Clone)]
 pub enum IdentTy {
-    Type(Ty),
-    Ident(Ident),
+    Type(SpannedTy),
+    Ident(SpannedIdent),
+    Arr(SpannedArr),
+}
+
+#[derive(Debug, Clone)]
+pub struct SpannedArr {
+    pub ty: Ty,
+    pub inner_ty: Box<IdentTy>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub struct Procedure {
-    pub ident: Ident,
+    pub ident: SpannedIdent,
     pub args: Vec<Field>,
     pub return_value: Option<IdentTy>,
     pub body: Block,
@@ -138,20 +162,20 @@ pub struct Procedure {
 
 #[derive(Debug, Clone)]
 pub struct Methods {
-    pub ident: Ident,
+    pub ident: SpannedIdent,
     pub procedures: Vec<Procedure>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Api {
-    pub ident: Ident,
-    pub super_api: Vec<Ident>,
+    pub ident: SpannedIdent,
+    pub super_api: Vec<SpannedIdent>,
     pub procedures: Vec<Procedure>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Require {
-    pub ident: Ident,
-    pub api: Ident,
+    pub ident: SpannedIdent,
+    pub api: SpannedIdent,
     pub procedures: Vec<Procedure>,
 }

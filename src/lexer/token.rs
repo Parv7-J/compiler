@@ -1,3 +1,5 @@
+//TODO: add break and continue
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Token {
     pub kind: TokenKind,

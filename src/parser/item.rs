@@ -129,7 +129,7 @@ impl Parser<'_> {
         Ok(Aor { ident, variants })
     }
 
-    pub fn parse_identlist(&mut self) -> miette::Result<Vec<Ident>> {
+    pub fn parse_identlist(&mut self) -> miette::Result<Vec<SpannedIdent>> {
         let mut idents = Vec::new();
         loop {
             let ident = self.parse_ident()?;

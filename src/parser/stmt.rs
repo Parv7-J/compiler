@@ -81,7 +81,7 @@ impl Parser<'_> {
     pub fn parse_for(&mut self) -> miette::Result<Stmt> {
         self.expect(TokenKind::Keyword(Keyword::For))?;
         self.expect(TokenKind::Delimiter(Delimiter::ParenOpen))?;
-        let ty = self.parse_identty()?;
+        let ty = self.parse_ty()?;
         let ident = self.parse_ident()?;
         self.expect(TokenKind::Delimiter(Delimiter::ParenClose))?;
         self.expect(TokenKind::Keyword(Keyword::In))?;

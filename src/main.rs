@@ -30,17 +30,17 @@ fn main() -> miette::Result<()> {
     let fname = "language";
     let input = fs::read_to_string(fname).unwrap();
     let lexer = Lexer::new(&input).unwrap();
-    let tokens = lexer.collect::<Vec<Token>>();
+    let tokens = lexer.clone().collect::<Vec<Token>>();
     for token in tokens {
-        println!(
-            "TokenKind: {:?}, String: {}",
+        print!(
+            "TokenKind: {:?}, String: {}  ",
             token.kind,
             &input[token.span.start as usize..token.span.end as usize]
         );
     }
 
-    // let parser = Parser::new(lexer);
-    // let ast = parser.parse(fname)?;
-    // println!("{ast:?}");
+    let parser = Parser::new(lexer);
+    let ast = parser.parse(fname)?;
+    println!("{ast:#?}");
     Ok(())
 }

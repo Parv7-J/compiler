@@ -3,57 +3,6 @@ use super::ast::*;
 use crate::lexer::token::*;
 use crate::parser::error::ParseError;
 
-//TODO: add tokens: char, '', break, continue,
-// #[derive(Clone, Copy, Debug, PartialEq)]
-// pub enum Operator {
-//     BitwiseAnd,
-//     BitwiseOr,
-//     Not,
-//     Assign,
-//     Plus,
-//     Minus,
-//     Star,
-//     ForwardSlash,
-//     Dot,
-//     Comparision(ComparisionOperator),
-//     Logical(LogicalOperator),
-//     CompoundAssign(CompoundAssignOperator),
-// }
-//
-//
-// #[derive(Clone, Copy, Debug, PartialEq)]
-// pub enum Delimiter {
-//only these ->
-//     ParenOpen,
-//     ParenClose,
-// }
-//
-// #[derive(Clone, Copy, Debug, PartialEq)]
-// pub enum ComparisionOperator {
-//     LessThan,
-//     GreaterThan,
-//     LessEqual,
-//     GreaterEqual,
-//     Equal,
-//     NotEqual,
-// }
-//
-// #[derive(Clone, Copy, Debug, PartialEq)]
-// pub enum LogicalOperator {
-//     And,
-//     Or,
-// }
-//
-// #[derive(Clone, Copy, Debug, PartialEq)]
-// pub enum CompoundAssignOperator {
-//     Add,
-//     Sub,
-//     Mul,
-//     Div,
-//     And,
-//     Or,
-// }
-
 impl Parser<'_> {
     pub fn parse_exprstmt(&mut self) -> miette::Result<Stmt> {
         //allow assignments inside expression statements
@@ -87,13 +36,22 @@ impl Parser<'_> {
             }
             TokenKind::Ident => {
                 let id = self.span_to_id(token.span);
-                S::Atom(Atom::Ident(id))
+                S::Atom(Atom::Ident(SpannedIdent {
+                    id,
+                    span: token.span,
+                }))
             }
             TokenKind::String | TokenKind::Number => S::Atom(token.into()),
             TokenKind::Operator(op) => {
                 let ((), r_bp) = prefix_binding_power(op).unwrap();
                 let rhs = self.expr_bp(r_bp)?;
-                S::Cons(op, vec![rhs])
+                S::Cons(
+                    SpannedOperator {
+                        op,
+                        span: token.span,
+                    },
+                    vec![rhs],
+                )
             }
             kind => {
                 return Err(ParseError::UnexpectedExpr {
@@ -116,11 +74,10 @@ impl Parser<'_> {
                 }
                 _ => {}
             }
-            self.next();
+            let t = self.next().unwrap();
             let rhs = self.expr_bp(r_bp)?;
-            lhs = S::Cons(op, vec![lhs, rhs]);
+            lhs = S::Cons(SpannedOperator { op, span: t.span }, vec![lhs, rhs]);
         }
-
         Ok(lhs)
     }
 }
@@ -152,9 +109,7 @@ fn infix_binding_power(op: Operator) -> Option<(u8, u8)> {
 
 fn prefix_binding_power(op: Operator) -> Option<((), u8)> {
     match op {
-        Operator::Not | Operator::Minus => Some(((), 17)),
-        //TODO: allow pointers
-        // Operator::Star => todo!(),
+        Operator::Not | Operator::Minus | Operator::Star | Operator::BitwiseAnd => Some(((), 17)),
         _ => None,
     }
 }
