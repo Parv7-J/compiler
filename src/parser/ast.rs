@@ -89,6 +89,7 @@ pub enum Stmt {
         ty: SpannedTy,
         ident: SpannedIdent,
         range: Option<(Expr, Expr, Option<Expr>)>,
+        inn: Option<SpannedIdent>,
         block: Block,
     },
     While {

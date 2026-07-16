@@ -27,7 +27,7 @@ fn main() -> miette::Result<()> {
     }))
     .unwrap();
 
-    let fname = "language";
+    let fname = "custom";
     let input = fs::read_to_string(fname).unwrap();
     let lexer = Lexer::new(&input).unwrap();
     let tokens = lexer.clone().collect::<Vec<Token>>();

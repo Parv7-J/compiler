@@ -129,10 +129,12 @@ impl Parser<'_> {
                     ident,
                     ty,
                     range: Some(range),
+                    inn: None,
                     block,
                 })
             }
             _ => {
+                let inn = self.parse_ident()?;
                 self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;
                 let block = self.parse_block()?;
                 self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
@@ -140,6 +142,7 @@ impl Parser<'_> {
                     ident,
                     ty,
                     range: None,
+                    inn: Some(inn),
                     block,
                 })
             }

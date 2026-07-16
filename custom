@@ -1,13 +1,13 @@
 get hello from "hello";
 
 proc foo[a(i32),b(u32)] : i32 {
-    bar(ptr a, ptr b);
+    bar(*a, *b);
     seed (a + b);
 }
 
 proc bar[f1(*i32), f2(*i32)] {
     
-    if *f1 == *f2 and f1 != f2 {
+    if *f1 == *f2 && f1 != f2 {
 
     }else if *f1 == *f2 + 1 {
         
@@ -24,18 +24,16 @@ proc bar[f1(*i32), f2(*i32)] {
     }
 
     arr[string] a = ["hello", "world"];
-    heaparr[string] = [];
-    heaparr[1];
-
+    heaparr[string] s1 = [];
+    s1[1];
 
     i32 a = 1;
-    i32 c = heaparr.foo(a);
+    i32 c = s1.foo(a);
 
     for (string s) in a {
-        print s;
     }
 
-    me mestruct = me[] 
+    me mestruct = me();
     me;
 
 
