@@ -2,10 +2,10 @@
 //TODO: Add spans -> Done
 //DESIGN: Add unknown tokenkind -> Done
 //OPTIONAL: Group Unknown tokens
-//TODO: Add newline tracking -> Done
+//TODO: Add newline tracking -> Done -> remove as now handled by miette
 //TODO: Add comment support
-//TODO: Add support for floatings
-//TODO: Add support for negatives
+//TODO: Add support for floatings -> Done
+//TODO: Add support for negatives -> - is unary, my bad
 
 //OPTIONAL REFACTOR: Instead of looping, delegate to eater functions
 
@@ -30,17 +30,17 @@ fn main() -> miette::Result<()> {
     let fname = "language";
     let input = fs::read_to_string(fname).unwrap();
     let lexer = Lexer::new(&input).unwrap();
-    // let tokens = lexer.collect::<Vec<Token>>();
-    // for token in tokens {
-    //     println!(
-    //         "TokenKind: {:?}, String: {}",
-    //         token.kind,
-    //         &input[token.span.start as usize..token.span.end as usize]
-    //     );
-    // }
+    let tokens = lexer.collect::<Vec<Token>>();
+    for token in tokens {
+        println!(
+            "TokenKind: {:?}, String: {}",
+            token.kind,
+            &input[token.span.start as usize..token.span.end as usize]
+        );
+    }
 
-    let parser = Parser::new(lexer);
-    let ast = parser.parse(fname)?;
-    println!("{ast:?}");
+    // let parser = Parser::new(lexer);
+    // let ast = parser.parse(fname)?;
+    // println!("{ast:?}");
     Ok(())
 }

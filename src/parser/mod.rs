@@ -28,7 +28,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    //TODO: should be a path
+    //TODO: filename should be a path
     pub fn parse(mut self, fname: &str) -> miette::Result<Ast<'a>> {
         let mut items = Vec::new();
         loop {

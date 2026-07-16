@@ -24,6 +24,9 @@ pub enum Started {
     String(u32),
     Ident(u32),
     Number(u32, bool),
+    Char(u32, bool),
+    SingleLineComment,
+    MultiLineComment,
 }
 
 impl<'a> Iterator for Lexer<'a, std::str::Chars<'a>> {
@@ -58,6 +61,7 @@ impl<'a> Lexer<'a, std::str::Chars<'a>> {
     ///As it may call self.bump(), we need to adhere by its requirements
     fn produce_token(&mut self, kind: TokenKind, start_opt: Option<u32>) -> Token {
         let start = start_opt.unwrap_or_else(|| self.bump());
+        //TODO: improve this messy logic
         match kind {
             TokenKind::Delimiter(_) => Token::new(kind, start, start + 1),
             TokenKind::Punctuation(_) => Token::new(kind, start, start + 1),
@@ -65,10 +69,12 @@ impl<'a> Lexer<'a, std::str::Chars<'a>> {
             TokenKind::Keyword(_) => Token::new(kind, start, self.at),
             TokenKind::Ident => Token::new(kind, start, self.at),
             TokenKind::Number => Token::new(kind, start, self.at),
+            TokenKind::Char => Token::new(kind, start, self.at),
             TokenKind::Operator(_) => match start_opt {
                 Some(_) => Token::new(kind, start, start + 1),
                 None => Token::new(kind, self.at - 2, self.at),
             },
+            TokenKind::Unknown => Token::new(kind, start, self.at),
             _ => unimplemented!(),
         }
     }
@@ -110,27 +116,30 @@ impl<'a> Lexer<'a, std::str::Chars<'a>> {
         loop {
             let ch = self.peek();
 
-            if ch == EOF_CHAR {
-                if self.is_eof() {
-                    match self.state {
-                        State::Started(Started::Operator(op)) => {
-                            self.state = State::Idle;
-                            return self.produce_token(TokenKind::Operator(op), Some(self.at - 1));
-                        }
-                        State::Started(Started::String(start)) => {
-                            self.state = State::Idle;
-                            return self.produce_token(TokenKind::Unknown, Some(start));
-                        }
-                        State::Idle => {
-                            return Token::new(TokenKind::Eof, self.at, self.at);
-                        }
-                        _ => unimplemented!(),
+            if ch == EOF_CHAR && self.is_eof() {
+                match self.state {
+                    State::Started(Started::Operator(op)) => {
+                        self.state = State::Idle;
+                        return self.produce_token(TokenKind::Operator(op), Some(self.at - 1));
                     }
-                } else {
-                    continue;
+                    State::Started(Started::String(start)) => {
+                        self.state = State::Idle;
+                        return self.produce_token(TokenKind::Unknown, Some(start));
+                    }
+                    State::Started(Started::Char(start, got)) => {
+                        self.state = State::Idle;
+                        return self.produce_token(TokenKind::Unknown, Some(start));
+                    }
+                    State::Idle
+                    | State::Started(Started::SingleLineComment | Started::MultiLineComment) => {
+                        self.state = State::Idle;
+                        return Token::new(TokenKind::Eof, self.at, self.at);
+                    }
+                    _ => unimplemented!(),
                 }
             }
 
+            //TODO:  no need for this now
             if self.state == State::Idle {
                 if ch == '\n' {
                     let at = self.bump();
@@ -144,21 +153,24 @@ impl<'a> Lexer<'a, std::str::Chars<'a>> {
 
             match self.state {
                 State::Idle => match ch {
-                    '&' | '|' | '+' | '*' | '/' | '<' | '>' | '=' | '!' => {
+                    '&' | '|' | '+' | '*' | '<' | '>' | '=' | '!' | '-' => {
                         self.bump();
-                        //shouldnt we just not do this, and do lookahead, because starting an
-                        //operating is complicating the lexer
+                        //TODO: remove started operator
                         self.state = State::Started(Started::Operator(ch.try_into().unwrap()))
                     }
-                    '-' => {
-                        let start = self.bump();
-                        let ch = self.peek();
-                        if !ch.is_ascii_digit() {
-                            self.state = State::Started(Started::Operator(Operator::Minus));
+                    '/' => {
+                        self.bump();
+                        if self.peek() == '/' {
+                            self.bump();
+                            self.state = State::Started(Started::SingleLineComment);
+                        } else if self.peek() == '*' {
+                            self.bump();
+                            self.state = State::Started(Started::MultiLineComment);
                         } else {
-                            self.state = State::Started(Started::Number(start, false));
+                            self.state = State::Started(Started::Operator(ch.try_into().unwrap()))
                         }
                     }
+                    '\'' => self.state = State::Started(Started::Char(self.bump(), false)),
                     '"' => {
                         self.state = State::Started(Started::String(self.bump()));
                     }
@@ -168,7 +180,6 @@ impl<'a> Lexer<'a, std::str::Chars<'a>> {
                     '0'..='9' => {
                         self.state = State::Started(Started::Number(self.bump(), false));
                     }
-
                     ';' | ',' | ':' => {
                         return self
                             .produce_token(TokenKind::Punctuation(ch.try_into().unwrap()), None);
@@ -249,6 +260,7 @@ impl<'a> Lexer<'a, std::str::Chars<'a>> {
                         self.bump();
                         continue;
                     }
+                    //CHOICE: . trails or not
                     if ch == '.' && !*dot_encountered {
                         *dot_encountered = true;
                         self.bump();
@@ -256,6 +268,42 @@ impl<'a> Lexer<'a, std::str::Chars<'a>> {
                     }
                     self.state = State::Idle;
                     return self.produce_token(TokenKind::Number, Some(start));
+                }
+                State::Started(Started::Char(start, ref mut got)) => {
+                    if ch == '\'' && *got {
+                        self.state = State::Idle;
+                        self.bump();
+                        return self.produce_token(TokenKind::Char, Some(start));
+                    } else if ch == '\'' {
+                        self.state = State::Idle;
+                        self.bump();
+                        return self.produce_token(TokenKind::Unknown, Some(start));
+                    }
+                    if *got {
+                        self.state = State::Idle;
+                        return self.produce_token(TokenKind::Unknown, Some(start));
+                    }
+                    *got = true;
+                    self.bump();
+                }
+                State::Started(Started::SingleLineComment) => {
+                    self.bump();
+                    if ch != '\n' {
+                        continue;
+                    }
+                    self.state = State::Idle;
+                }
+                State::Started(Started::MultiLineComment) => {
+                    self.bump();
+
+                    if ch != '*' {
+                        continue;
+                    }
+
+                    if self.peek() == '/' {
+                        self.bump();
+                        self.state = State::Idle;
+                    }
                 }
             }
         }

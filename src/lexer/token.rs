@@ -43,9 +43,10 @@ pub fn from_spans(span1: Span, span2: Span) -> miette::SourceSpan {
 pub enum TokenKind {
     String,
     Ident,
-    //TODO: fix number
+    //TODO: fix number -> done
     Number,
     //TODO: add %
+    Char,
     Operator(Operator),
     Keyword(Keyword),
     Punctuation(Punctuation),
@@ -85,6 +86,7 @@ pub enum Ty {
     HeapArr,
     String,
     HeapString,
+    Char,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -185,6 +187,7 @@ impl<'a> TryFrom<&'a str> for Keyword {
             "heaparr" => Self::Type(Ty::HeapArr),
             "string" => Self::Type(Ty::String),
             "heapstring" => Self::Type(Ty::HeapString),
+            "char" => Self::Type(Ty::Char),
             "methods" => Self::Methods,
             "require" => Self::Require,
             "aor" => Self::Aor,
@@ -310,9 +313,10 @@ impl TryFrom<Operator> for CompoundAssignOperator {
 impl std::fmt::Display for TokenKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TokenKind::String => f.write_str("String Literal"),
-            TokenKind::Ident => f.write_str("Identifier"),
-            TokenKind::Number => f.write_str("Number"),
+            TokenKind::String => f.write_str("string literal"),
+            TokenKind::Ident => f.write_str("identifier"),
+            TokenKind::Number => f.write_str("number"),
+            TokenKind::Char => f.write_str("char"),
             TokenKind::Operator(operator) => write!(f, "{operator}"),
             TokenKind::Keyword(keyword) => write!(f, "{keyword}"),
             TokenKind::Punctuation(punctuation) => write!(f, "{punctuation}"),
@@ -334,6 +338,7 @@ impl std::fmt::Display for Ty {
             Ty::HeapArr => "heaparr",
             Ty::String => "string",
             Ty::HeapString => "heapstring",
+            Ty::Char => "char",
         };
         write!(f, "{s}")
     }
