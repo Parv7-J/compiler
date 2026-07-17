@@ -1,26 +1,25 @@
 use crate::lexer::token::*;
-use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct Ast<'a> {
     pub items: Vec<Item>,
-    pub intern: Intern<'a>,
+    pub input: &'a str,
 }
 
-#[derive(Debug, Clone)]
-pub struct Intern<'a> {
-    pub db: Vec<String>,
-    pub ids: HashMap<&'a str, usize>,
-}
-
-impl Intern<'_> {
-    pub fn new() -> Self {
-        Self {
-            db: Vec::new(),
-            ids: HashMap::new(),
-        }
-    }
-}
+// #[derive(Debug, Clone)]
+// pub struct Intern<'a> {
+//     pub db: Vec<String>,
+//     pub ids: HashMap<&'a str, usize>,
+// }
+//
+// impl Intern<'_> {
+//     pub fn new() -> Self {
+//         Self {
+//             db: Vec::new(),
+//             ids: HashMap::new(),
+//         }
+//     }
+// }
 
 #[derive(Debug, Clone)]
 pub enum Item {
@@ -137,10 +136,7 @@ pub struct Field {
 }
 
 #[derive(Debug, Clone)]
-pub struct SpannedIdent {
-    pub id: usize,
-    pub span: Span,
-}
+pub struct SpannedIdent(pub Span);
 
 #[derive(Debug, Clone)]
 pub struct LiteralString(pub Span);

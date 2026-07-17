@@ -7,9 +7,14 @@ use crate::parser::error::ParseError;
 
 impl Parser<'_> {
     pub fn parse_get(&mut self) -> miette::Result<Get> {
-        self.expect(TokenKind::Keyword(Keyword::Get))?;
+        let get = self.expect(TokenKind::Keyword(Keyword::Get))?;
         let imports = self.parse_identlist()?;
-        miette::ensure!(!imports.is_empty(), "bad");
+        if imports.is_empty() {
+            return Err(ParseError::EmptyImportsList {
+                span: get.span.into(),
+            }
+            .into());
+        }
         self.expect(TokenKind::Keyword(Keyword::From))?;
         let module = self.parse_string()?;
         self.expect(TokenKind::Punctuation(Punctuation::Semicolon))?;
@@ -35,9 +40,14 @@ impl Parser<'_> {
         self.expect(TokenKind::Keyword(Keyword::Api))?;
         let ident = self.parse_ident()?;
         let super_api = if matches!(self.peek(), Some(TokenKind::Keyword(Keyword::Also))) {
-            self.next();
+            let token = self.next().unwrap();
             let list = self.parse_identlist()?;
-            miette::ensure!(!list.is_empty(), "bad");
+            if list.is_empty() {
+                return Err(ParseError::EmptySubApis {
+                    span: token.span.into(),
+                }
+                .into());
+            }
             list
         } else {
             vec![]
@@ -132,6 +142,9 @@ impl Parser<'_> {
     pub fn parse_identlist(&mut self) -> miette::Result<Vec<SpannedIdent>> {
         let mut idents = Vec::new();
         loop {
+            if self.peek() != Some(TokenKind::Ident) {
+                break;
+            }
             let ident = self.parse_ident()?;
             idents.push(ident);
             if self.peek() != Some(TokenKind::Punctuation(Punctuation::Comma)) {

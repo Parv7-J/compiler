@@ -3,6 +3,8 @@
 use super::Parser;
 use super::ast::*;
 use crate::lexer::token::*;
+use crate::parser::error::Expected;
+use crate::parser::error::Found;
 use crate::parser::error::ParseError;
 
 impl Parser<'_> {
@@ -24,8 +26,10 @@ impl Parser<'_> {
         let token = match self.next() {
             Some(token) => token,
             None => {
-                return Err(ParseError::UnexpectedEofExpr {
-                    end: (self.lexer.input.len().saturating_sub(1), 1).into(),
+                return Err(ParseError::Unexpected {
+                    expected: Expected::Expr,
+                    found: Found::Eof,
+                    span: (self.lexer.input.len().saturating_sub(1), 1).into(),
                 }
                 .into());
             }
@@ -54,13 +58,7 @@ impl Parser<'_> {
                 self.expect(TokenKind::Delimiter(Delimiter::SquareClose))?;
                 Expr::List(arr)
             }
-            TokenKind::Ident => {
-                let id = self.span_to_id(token.span);
-                Expr::Atom(Atom::Ident(SpannedIdent {
-                    id,
-                    span: token.span,
-                }))
-            }
+            TokenKind::Ident => Expr::Atom(Atom::Ident(SpannedIdent(token.span))),
             TokenKind::Keyword(Keyword::Boolean(boolean)) => {
                 Expr::Atom(Atom::Boolean(SpannedBoolean {
                     boolean,
@@ -80,8 +78,9 @@ impl Parser<'_> {
                 )
             }
             kind => {
-                return Err(ParseError::UnexpectedExpr {
-                    kind,
+                return Err(ParseError::Unexpected {
+                    expected: Expected::Expr,
+                    found: Found::Kind(kind),
                     span: token.span.into(),
                 }
                 .into());

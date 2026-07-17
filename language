@@ -1,4 +1,3 @@
-proc foo[] {
-    arr[i32] a = [1,2,3];
-    foo(a[1]);
+api Hello also {
+
 }

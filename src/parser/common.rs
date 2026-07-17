@@ -1,6 +1,8 @@
 use super::Parser;
 use super::ast::*;
 use crate::lexer::token::*;
+use crate::parser::error::Expected;
+use crate::parser::error::Found;
 use crate::parser::error::ParseError;
 
 impl Parser<'_> {
@@ -88,22 +90,22 @@ impl Parser<'_> {
             Some(TokenKind::Keyword(Keyword::Type(_))) => self.parse_anyty(),
             Some(TokenKind::Ident) => {
                 let token = self.expect(TokenKind::Ident)?;
-                Ok(IdentTy::Ident(SpannedIdent {
-                    id: self.span_to_id(token.span),
-                    span: token.span,
-                }))
+                Ok(IdentTy::Ident(SpannedIdent(token.span)))
             }
             Some(TokenKind::Operator(Operator::Star)) => Ok(IdentTy::Ptr(self.parse_ptr()?)),
             Some(_) => {
                 let token = self.next().unwrap();
-                Err(ParseError::UnexpectedType {
-                    kind: token.kind,
+                Err(ParseError::Unexpected {
+                    expected: Expected::Type,
+                    found: Found::Kind(token.kind),
                     span: token.span.into(),
                 }
                 .into())
             }
-            None => Err(ParseError::UnexpectedEofType {
-                end: (self.lexer.input.len().saturating_sub(1), 1).into(),
+            None => Err(ParseError::Unexpected {
+                expected: Expected::Type,
+                found: Found::Eof,
+                span: (self.lexer.input.len().saturating_sub(1), 1).into(),
             }
             .into()),
         }
@@ -138,13 +140,8 @@ impl Parser<'_> {
 
     pub fn parse_ident(&mut self) -> miette::Result<SpannedIdent> {
         let token = self.expect(TokenKind::Ident)?;
-        let id = self.span_to_id(token.span);
-        Ok(SpannedIdent {
-            id,
-            span: token.span,
-        })
+        Ok(SpannedIdent(token.span))
     }
-
     pub fn parse_anyty(&mut self) -> miette::Result<IdentTy> {
         let TokenKind::Keyword(Keyword::Type(ty)) = self.peek().unwrap() else {
             unreachable!()
@@ -162,13 +159,16 @@ impl Parser<'_> {
                 kind: TokenKind::Keyword(Keyword::Type(ty)),
                 span,
             }) => Ok(SpannedTy { ty, span }),
-            Some(t) => Err(ParseError::UnexpectedType {
-                kind: t.kind,
+            Some(t) => Err(ParseError::Unexpected {
+                expected: Expected::Type,
+                found: Found::Kind(t.kind),
                 span: t.span.into(),
             }
             .into()),
-            None => Err(ParseError::UnexpectedEofType {
-                end: (self.lexer.input.len().saturating_sub(1), 1).into(),
+            None => Err(ParseError::Unexpected {
+                expected: Expected::Type,
+                found: Found::Eof,
+                span: (self.lexer.input.len().saturating_sub(1), 1).into(),
             }
             .into()),
         }

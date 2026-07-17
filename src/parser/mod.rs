@@ -1,8 +1,9 @@
-use std::collections::hash_map::Entry;
+use std::sync::Arc;
 
 use crate::parser::ast::Ast;
-use crate::parser::ast::Intern;
 use crate::parser::ast::Item;
+use crate::parser::error::Expected;
+use crate::parser::error::Found;
 use crate::parser::error::ParseError;
 use crate::{Lexer, lexer::token::*};
 
@@ -16,7 +17,7 @@ mod stmt;
 pub struct Parser<'a> {
     pub lexer: Lexer<'a, std::str::Chars<'a>>,
     pub token: Option<Token>,
-    pub idents: Intern<'a>,
+    pub errors: Vec<miette::Report>,
 }
 
 impl<'a> Parser<'a> {
@@ -24,43 +25,55 @@ impl<'a> Parser<'a> {
         Self {
             lexer,
             token: None,
-            idents: Intern::new(),
+            errors: Vec::new(),
         }
     }
 
     //TODO: filename should be a path
-    pub fn parse(mut self, fname: &str) -> miette::Result<Ast<'a>> {
+    pub fn parse(mut self, fname: &str) -> Ast<'a> {
         let mut items = Vec::new();
+        let source = Arc::new(miette::NamedSource::new(
+            fname,
+            self.lexer.input.to_string(),
+        ));
         loop {
             match self.peek() {
                 Some(TokenKind::Keyword(_)) => {
-                    items.push(self.parse_item().map_err(|e| {
-                        e.with_source_code(miette::NamedSource::new(
-                            fname,
-                            self.lexer.input.to_string(),
-                        ))
-                    })?);
+                    let item_result = self.parse_item();
+                    match item_result {
+                        Ok(item) => items.push(item),
+                        Err(report) => self.errors.push(report),
+                    }
                 }
                 Some(_) => {
-                    let Token { kind, span } = self.next().expect("peeked and got some");
-                    return Err(miette::Report::from(ParseError::TopLevelNonItem {
-                        kind,
-                        span: span.into(),
-                    })
-                    //TODO: remove this expensive allocation
-                    .with_source_code(miette::NamedSource::new(
-                        fname,
-                        self.lexer.input.to_string(),
-                    )));
+                    let Token { kind, span } = self
+                        .next()
+                        .expect("already peeked and confirmed presence of a token");
+                    self.errors
+                        .push(miette::Report::from(ParseError::TopLevelNonItem {
+                            kind,
+                            span: span.into(),
+                        }));
                 }
                 None => break,
             }
         }
 
-        Ok(Ast {
+        if !self.errors.is_empty() {
+            eprintln!("Found {} errors ->\n", self.errors.len());
+        }
+        for (no, report) in self.errors.into_iter().enumerate() {
+            eprintln!(
+                "Error {}:\n {:?}\n",
+                no + 1,
+                report.with_source_code(source.clone())
+            );
+        }
+
+        Ast {
             items,
-            intern: self.idents,
-        })
+            input: self.lexer.input,
+        }
     }
 
     fn next(&mut self) -> Option<Token> {
@@ -102,34 +115,35 @@ impl<'a> Parser<'a> {
     fn expect(&mut self, kind: TokenKind) -> miette::Result<Token> {
         match self.next() {
             Some(token) if token.kind == kind => Ok(token),
-            Some(token) => Err(ParseError::UnexpectedToken {
-                kind: token.kind,
+            Some(token) => Err(ParseError::Unexpected {
+                expected: Expected::Kind(kind),
+                found: Found::Kind(token.kind),
                 span: token.span.into(),
-                expected: kind,
             }
             .into()),
-            None => Err(ParseError::UnexpectedEof {
-                kind,
-                end: (self.lexer.input.len().saturating_sub(1), 1).into(),
+            None => Err(ParseError::Unexpected {
+                expected: Expected::Kind(kind),
+                found: Found::Eof,
+                span: (self.lexer.input.len().saturating_sub(1), 1).into(),
             }
             .into()),
         }
     }
-    fn span_to_id(&mut self, span: Span) -> usize {
-        let Span { start, end } = span;
-        let ident = &self.lexer.input[start as usize..end as usize];
-        match self.idents.ids.entry(ident) {
-            Entry::Occupied(occupied_entry) => *occupied_entry.get(),
-            Entry::Vacant(vacant_entry) => {
-                let pos = self.idents.db.len();
-                self.idents.db.push(ident.to_string());
-                vacant_entry.insert(pos);
-                pos
-            }
-        }
-    }
-
-    fn _id_to_ident(&self, id: usize) -> Option<&String> {
-        self.idents.db.get(id)
-    }
+    // fn span_to_id(&mut self, span: Span) -> usize {
+    //     let Span { start, end } = span;
+    //     let ident = &self.lexer.input[start as usize..end as usize];
+    //     match self.idents.ids.entry(ident) {
+    //         Entry::Occupied(occupied_entry) => *occupied_entry.get(),
+    //         Entry::Vacant(vacant_entry) => {
+    //             let pos = self.idents.db.len();
+    //             self.idents.db.push(ident.to_string());
+    //             vacant_entry.insert(pos);
+    //             pos
+    //         }
+    //     }
+    // }
+    //
+    // fn _id_to_ident(&self, id: usize) -> Option<&String> {
+    //     self.idents.db.get(id)
+    // }
 }

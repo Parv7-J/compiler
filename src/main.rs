@@ -1,4 +1,3 @@
-#![allow(unused, dead_code)]
 //TODO: Add spans -> Done
 //DESIGN: Add unknown tokenkind -> Done
 //OPTIONAL: Group Unknown tokens
@@ -19,16 +18,14 @@ fn main() -> miette::Result<()> {
     // let mut input = String::new();
     // stdin.read_line(&mut input).unwrap();
     miette::set_hook(Box::new(|_| {
-        Box::new(
-            MietteHandlerOpts::new()
-                .context_lines(3) // <-- Change this to show more lines above and below
-                .build(),
-        )
+        Box::new(MietteHandlerOpts::new().context_lines(3).build())
     }))
     .unwrap();
 
-    let fname = "custom";
-    let input = fs::read_to_string(fname).unwrap();
+    let mut args = std::env::args();
+    args.next();
+    let fname = args.next().unwrap_or(String::from("language"));
+    let input = fs::read_to_string(&fname).unwrap();
     let lexer = Lexer::new(&input).unwrap();
     let tokens = lexer.clone().collect::<Vec<Token>>();
     for token in tokens {
@@ -40,7 +37,7 @@ fn main() -> miette::Result<()> {
     }
 
     let parser = Parser::new(lexer);
-    let ast = parser.parse(fname)?;
-    println!("{ast:#?}");
+    let ast = parser.parse(&fname);
+    println!("{:#?}", ast.items);
     Ok(())
 }
