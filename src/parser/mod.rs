@@ -43,6 +43,8 @@ impl<'a> Parser<'a> {
                     match item_result {
                         Ok(item) => items.push(item),
                         Err(report) => self.errors.push(report),
+                        //here we got a report, so we need to actually move to a good token and
+                        //start parsing again by reaching a synchronization point
                     }
                 }
                 Some(_) => {
@@ -95,6 +97,19 @@ impl<'a> Parser<'a> {
         None
     }
 
+    fn consume(&mut self) -> Token {
+        self.token
+            .take()
+            .or_else(|| self.lexer.next())
+            .expect("only called after peek")
+    }
+
+    fn fake_consume(&mut self) -> Token {
+        self.token
+            .or_else(|| self.lexer.clone().next())
+            .expect("only called after peek")
+    }
+
     fn parse_item(&mut self) -> miette::Result<Item> {
         let item = match self
             .peek()
@@ -113,14 +128,17 @@ impl<'a> Parser<'a> {
     }
 
     fn expect(&mut self, kind: TokenKind) -> miette::Result<Token> {
-        match self.next() {
-            Some(token) if token.kind == kind => Ok(token),
-            Some(token) => Err(ParseError::Unexpected {
-                expected: Expected::Kind(kind),
-                found: Found::Kind(token.kind),
-                span: token.span.into(),
+        match self.peek() {
+            Some(token_kind) if token_kind == kind => Ok(self.consume()),
+            Some(_) => {
+                let token = self.fake_consume();
+                Err(ParseError::Unexpected {
+                    expected: Expected::Kind(kind),
+                    found: Found::Kind(token.kind),
+                    span: token.span.into(),
+                }
+                .into())
             }
-            .into()),
             None => Err(ParseError::Unexpected {
                 expected: Expected::Kind(kind),
                 found: Found::Eof,
@@ -129,21 +147,21 @@ impl<'a> Parser<'a> {
             .into()),
         }
     }
-    // fn span_to_id(&mut self, span: Span) -> usize {
-    //     let Span { start, end } = span;
-    //     let ident = &self.lexer.input[start as usize..end as usize];
-    //     match self.idents.ids.entry(ident) {
-    //         Entry::Occupied(occupied_entry) => *occupied_entry.get(),
-    //         Entry::Vacant(vacant_entry) => {
-    //             let pos = self.idents.db.len();
-    //             self.idents.db.push(ident.to_string());
-    //             vacant_entry.insert(pos);
-    //             pos
-    //         }
-    //     }
-    // }
-    //
-    // fn _id_to_ident(&self, id: usize) -> Option<&String> {
-    //     self.idents.db.get(id)
-    // }
 }
+
+//     let Span { start, end } = span;
+//     let ident = &self.lexer.input[start as usize..end as usize];
+//     match self.idents.ids.entry(ident) {
+//         Entry::Occupied(occupied_entry) => *occupied_entry.get(),
+//         Entry::Vacant(vacant_entry) => {
+//             let pos = self.idents.db.len();
+//             self.idents.db.push(ident.to_string());
+//             vacant_entry.insert(pos);
+//             pos
+//         }
+//     }
+// }
+//
+// fn _id_to_ident(&self, id: usize) -> Option<&String> {
+//     self.idents.db.get(id)
+// }

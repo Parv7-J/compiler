@@ -127,6 +127,10 @@ impl Parser<'_> {
         self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;
         let fields = self.parse_fields()?;
         self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
+        // struct Foo
+        // let a = self.parse_packing();
+        // println!("{a:?}");
+        let b = 1;
         Ok(Packing { ident, fields })
     }
 
