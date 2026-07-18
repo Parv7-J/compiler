@@ -11,7 +11,6 @@
 use compiler::*;
 use miette::MietteHandlerOpts;
 use std::fs;
-use std::io::BufRead;
 
 fn main() -> miette::Result<()> {
     // let mut stdin = std::io::stdin().lock();
@@ -39,5 +38,7 @@ fn main() -> miette::Result<()> {
     let parser = Parser::new(lexer);
     let ast = parser.parse(&fname);
     println!("{:#?}", ast.items);
+    let analyzer = AstAnalyzer::new(ast);
+    analyzer.analyze();
     Ok(())
 }

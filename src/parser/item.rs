@@ -130,7 +130,6 @@ impl Parser<'_> {
         // struct Foo
         // let a = self.parse_packing();
         // println!("{a:?}");
-        let b = 1;
         Ok(Packing { ident, fields })
     }
 

@@ -7,7 +7,7 @@ use crate::parser::error::Found;
 use crate::parser::error::ParseError;
 use crate::{Lexer, lexer::token::*};
 
-mod ast;
+pub mod ast;
 mod common;
 mod error;
 mod item;

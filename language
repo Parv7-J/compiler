@@ -1,3 +1,10 @@
-api Hello also {
+packing UsesFoo {
+    foofield(Foo),
+    classes(string)
+}
 
+packing Foo {
+    name(string),
+    age(u32),
+    id(isize)
 }
