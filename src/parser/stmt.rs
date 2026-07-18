@@ -36,15 +36,7 @@ impl Parser<'_> {
                 _ => {}
             }
         }
-        //failed to find a semi or an assign -> stream ended
         todo!("failed to find a semi or an assign -> stream ended")
-        //Header header = 1; -> dec
-        //*Header header = 2; -> dec
-        //Header(); -> exprstmt
-        //header += 1; -> exprstmt
-        //*header += 1; -> exprstmt
-        //problem is both are prefixed by idents, or *
-        //i think i should walk till ; and find if there is an assign operator
     }
 
     pub fn parse_declaration(&mut self) -> miette::Result<Stmt> {

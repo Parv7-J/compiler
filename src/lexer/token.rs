@@ -1,5 +1,3 @@
-//TODO: add break and continue
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Token {
     pub kind: TokenKind,
@@ -45,7 +43,6 @@ pub fn from_spans(span1: Span, span2: Span) -> miette::SourceSpan {
 pub enum TokenKind {
     String,
     Ident,
-    //TODO: fix number -> done
     Number,
     //TODO: add %
     Char,

@@ -148,20 +148,3 @@ impl<'a> Parser<'a> {
         }
     }
 }
-
-//     let Span { start, end } = span;
-//     let ident = &self.lexer.input[start as usize..end as usize];
-//     match self.idents.ids.entry(ident) {
-//         Entry::Occupied(occupied_entry) => *occupied_entry.get(),
-//         Entry::Vacant(vacant_entry) => {
-//             let pos = self.idents.db.len();
-//             self.idents.db.push(ident.to_string());
-//             vacant_entry.insert(pos);
-//             pos
-//         }
-//     }
-// }
-//
-// fn _id_to_ident(&self, id: usize) -> Option<&String> {
-//     self.idents.db.get(id)
-// }

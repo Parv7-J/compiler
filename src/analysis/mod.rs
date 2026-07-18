@@ -123,9 +123,4 @@ impl Analyzer<'_> {
         *symbol_info = new_symbol_info;
         (symbol_id, symbol_span)
     }
-
-    // fn intern_to_item(&mut self, span: Span) -> Option<&mut ItemInfo> {
-    //     let intern_id = self.intern.insert(span);
-    //     self.item_store.get(intern_id)
-    // }
 }
