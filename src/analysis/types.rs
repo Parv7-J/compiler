@@ -82,7 +82,7 @@ impl<'a> IdentStore<'a> {
 #[derive(Debug, Clone)]
 pub struct DeclarationStore {
     pub ids: HashMap<DeclarationKey, DeclarationId>,
-    pub db: Vec<Vec<DeclarationInfo>>,
+    pub db: Vec<DeclarationEntry>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -96,6 +96,21 @@ impl DeclarationKey {
         Self {
             scope_id: scope,
             ident_id,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct DeclarationEntry {
+    pub at: usize,
+    pub info: Vec<DeclarationInfo>,
+}
+
+impl DeclarationEntry {
+    pub fn new(info: DeclarationInfo) -> Self {
+        Self {
+            at: 0,
+            info: vec![info],
         }
     }
 }
@@ -118,8 +133,6 @@ pub enum DeclarationType {
     Require,
     Get,
 }
-
-//only one declaration for each span -> thus we can store the span directly inside DeclarationInfo
 
 pub enum IsTy {
     Yes,
@@ -150,7 +163,7 @@ impl DeclarationStore {
                         ty: DeclarationType::PendingNonType,
                     },
                 };
-                self.db[occupied_entry.get().0].push(declaration_info);
+                self.db[occupied_entry.get().0].info.push(declaration_info);
                 *occupied_entry.get()
             }
             Entry::Vacant(vacant_entry) => {
@@ -166,40 +179,48 @@ impl DeclarationStore {
                         ty: DeclarationType::PendingNonType,
                     },
                 };
-                self.db.push(vec![declaration_info]);
+                self.db.push(DeclarationEntry::new(declaration_info));
                 idx
             }
         }
     }
 
-    ///gets the DeclarationId from IdentId, or else None
-    pub fn getid(&self, key: DeclarationKey) -> Option<DeclarationId> {
+    ///should always be called when it is ensured that the id corresponds to an entry
+    ///panics if declaration_id is not in the store
+    pub fn first_declaration(&self, id: DeclarationId) -> &DeclarationInfo {
+        &self.db[id.0].info[0]
+    }
+
+    ///gets the DeclarationId from DeclarationKey, or else None
+    pub fn get_did(&self, key: DeclarationKey) -> Option<DeclarationId> {
         self.ids.get(&key).copied()
     }
 
-    pub fn value(&self, id: DeclarationId) -> Option<&Vec<DeclarationInfo>> {
-        self.db.get(id.0)
+    ///should always be called when it is ensured that the id corresponds to an entry
+    ///should only be called once for every redeclaration (i.e. that have the same declaration id
+    ///but are diff declarations)
+    ///updates the internal state so that the next call to this would report the next declaration ->
+    ///in order to initialize one by one
+    ///panics if there is no entry related to the declaration id
+    pub fn get_dinfo(&mut self, id: DeclarationId) -> &mut DeclarationInfo {
+        let entry = &mut self.db[id.0];
+        //SAFETY: starts at 0, and thus always starts at 1, and 1 - 1 = 0
+        //OVERFLOW: can overflow, if we change the type for memory efficiency
+        entry.at += 1;
+        dbg!(entry.at);
+        &mut entry.info[entry.at - 1]
     }
 
-    pub fn value_mut(&mut self, id: DeclarationId) -> Option<&mut Vec<DeclarationInfo>> {
-        self.db.get_mut(id.0)
-    }
-
-    ///similar to get on hashmap
-    pub fn getinfo(&self, id: DeclarationId, idx: usize) -> Option<&DeclarationInfo> {
-        self.db.get(id.0).and_then(|v| v.get(idx))
-    }
-
-    ///similar to get_mut on hashmap
-    pub fn getmutinfo(&mut self, id: DeclarationId, idx: usize) -> Option<&mut DeclarationInfo> {
-        self.db.get_mut(id.0).and_then(|v| v.get_mut(idx))
+    pub fn dinfo(&self, id: DeclarationId) -> &DeclarationInfo {
+        let entry = &self.db[id.0];
+        &entry.info[entry.at]
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct SymbolStore {
     pub ids: HashMap<SymbolKey, SymbolId>,
-    pub db: Vec<Vec<SymbolInfo>>,
+    pub db: Vec<SymbolEntry>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -208,12 +229,28 @@ pub struct SymbolKey {
     declaration_id: DeclarationId,
     ident_id: IdentId,
 }
+
 impl SymbolKey {
     pub fn new(scope: ScopeId, dec_id: DeclarationId, ident_id: IdentId) -> Self {
         Self {
             scope_id: scope,
             declaration_id: dec_id,
             ident_id,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SymbolEntry {
+    pub at: usize,
+    pub info: Vec<SymbolInfo>,
+}
+
+impl SymbolEntry {
+    pub fn new(info: SymbolInfo) -> Self {
+        Self {
+            at: 0,
+            info: vec![info],
         }
     }
 }
@@ -240,15 +277,13 @@ impl SymbolStore {
         }
     }
 
-    //this is wrong, as we can allow dup ids
-
     ///inserts the IdentId inside the store, returning it or
     ///panics because we have two duplicate interns, and thus two duplicate named ids, even though
     ///they may be of different type
     pub fn insert(&mut self, key: SymbolKey, span: Span) -> SymbolId {
         match self.ids.entry(key) {
             Entry::Occupied(occupied_entry) => {
-                self.db[occupied_entry.get().0].push(SymbolInfo {
+                self.db[occupied_entry.get().0].info.push(SymbolInfo {
                     span,
                     ty: SymbolType::Pending,
                 });
@@ -257,34 +292,37 @@ impl SymbolStore {
             Entry::Vacant(vacant_entry) => {
                 let idx = SymbolId(self.db.len());
                 vacant_entry.insert(idx);
-                self.db.push(vec![SymbolInfo {
+                self.db.push(SymbolEntry::new(SymbolInfo {
                     span,
                     ty: SymbolType::Pending,
-                }]);
+                }));
                 idx
             }
         }
     }
 
-    pub fn value(&self, id: SymbolId) -> Option<&Vec<SymbolInfo>> {
-        self.db.get(id.0)
+    ///should always be called when it is ensured that the id corresponds to an entry
+    ///panics if symbol_id is not in the store
+    pub fn first_declaration(&self, id: SymbolId) -> &SymbolInfo {
+        &self.db[id.0].info[0]
     }
 
-    pub fn value_mut(&mut self, id: SymbolId) -> Option<&mut Vec<SymbolInfo>> {
-        self.db.get_mut(id.0)
-    }
-
-    pub fn getid(&self, key: SymbolKey) -> Option<SymbolId> {
+    ///gets the SymbolId from SymbolKey, or else None
+    pub fn get_sid(&self, key: SymbolKey) -> Option<SymbolId> {
         self.ids.get(&key).copied()
     }
 
-    ///similar to get on hashmap
-    pub fn getinfo(&self, id: SymbolId, idx: usize) -> Option<&SymbolInfo> {
-        self.db.get(id.0).and_then(|v| v.get(idx))
-    }
-
-    ///similar to get_mut on hashmap
-    pub fn getmutinfo(&mut self, id: SymbolId, idx: usize) -> Option<&mut SymbolInfo> {
-        self.db.get_mut(id.0).and_then(|v| v.get_mut(idx))
+    ///should always be called when it is ensured that the id corresponds to an entry
+    ///should only be called once for every symbol redefinition(i.e. that have the same symbol id
+    ///but are diff definitions)
+    ///updates the internal state so that the next call to this would report the next definition->
+    ///in order to initialize one by one
+    ///panics if there is no entry related to the symbol id
+    pub fn get_sinfo(&mut self, id: SymbolId) -> &mut SymbolInfo {
+        let entry = &mut self.db[id.0];
+        //SAFETY: starts at 0, and thus always starts at 1, and 1 - 1 = 0
+        //OVERFLOW: can overflow, if we change the type for memory efficiency
+        entry.at += 1;
+        &mut entry.info[entry.at - 1]
     }
 }

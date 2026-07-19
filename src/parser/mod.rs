@@ -1,3 +1,4 @@
+//TOOD: a main function needs to be always defined -> entry point
 use std::sync::Arc;
 
 use crate::parser::ast::Ast;

@@ -5,10 +5,10 @@ use thiserror::Error;
 
 use crate::lexer::token::TokenKind;
 
-#[derive(Error, Diagnostic, Debug)]
+#[derive(Error, Diagnostic, Debug, Clone)]
 pub enum AnalysisError {
     #[error("Duplicate Item Name")]
-    #[diagnostic(help("change the name of any one item"))]
+    #[diagnostic(help("rename an item"))]
     DuplicateItem {
         #[label("duplicate item")]
         duplicate_span: SourceSpan,
@@ -16,10 +16,12 @@ pub enum AnalysisError {
         already_declared_span: SourceSpan,
     },
     #[error("Duplicate Field Name")]
-    #[diagnostic(help("You must atleast import one thing, or remove the whole get statement"))]
+    #[diagnostic(help("rename a field"))]
     DuplicateField {
-        #[label("Expected Import list after this")]
-        span: SourceSpan,
+        #[label("duplicate field")]
+        duplicate_span: SourceSpan,
+        #[label("field already defined with the same name")]
+        already_declared_span: SourceSpan,
     },
 }
 

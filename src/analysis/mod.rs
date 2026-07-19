@@ -12,7 +12,6 @@ use types::*;
 pub struct AstAnalyzer<'a> {
     ast: Ast<'a>,
     analyzer: Analyzer<'a>,
-    errors: Vec<Report>,
 }
 
 //packing Foo {a(i32), b(Bar)} -> no need for the span of 'packing', we need the span of 'Foo', we
@@ -34,8 +33,8 @@ impl<'a> AstAnalyzer<'a> {
                 idents: IdentStore::new(input),
                 declarations: DeclarationStore::new(),
                 symbols: SymbolStore::new(),
+                errors: Vec::new(),
             },
-            errors: Vec::new(),
         }
     }
 
@@ -46,10 +45,11 @@ impl<'a> AstAnalyzer<'a> {
             "language",
             self.ast.input.to_string(),
         ));
-        if !self.errors.is_empty() {
-            eprintln!("Found {} semantic errors ->\n", self.errors.len());
+        if !self.analyzer.errors.is_empty() {
+            eprintln!("Found {} semantic errors ->\n", self.analyzer.errors.len());
         }
-        for (no, report) in self.errors.into_iter().enumerate() {
+        let errors = std::mem::take(&mut self.analyzer.errors);
+        for (no, report) in errors.into_iter().enumerate() {
             eprintln!(
                 "Error {}:\n {:?}\n",
                 no + 1,
@@ -61,32 +61,38 @@ impl<'a> AstAnalyzer<'a> {
     }
 
     pub fn collect_top_level_definitions(&mut self) {
-        for item in &self.ast.items {
-            let ident_span = item.get_ident_span();
-            let ident_id = self.analyzer.idents.insert(item.get_ident_span());
+        let analyzer = &mut self.analyzer;
+        let items = &self.ast.items;
+
+        for item in items {
+            let item_span = item.span();
+            let item_iid = analyzer.idents.insert(item_span);
+
             let is_ty = if matches!(item, Item::Packing(_) | Item::Aor(_)) {
                 IsTy::Yes
             } else {
                 IsTy::No
             };
-            let key = DeclarationKey::new(self.analyzer.scope, ident_id);
-            if let Some(id) = self.analyzer.declarations.getid(key) {
-                let already_declared_span = self.analyzer.declarations.getinfo(id, 0).unwrap().span;
-                self.errors.push(
+
+            let item_key = DeclarationKey::new(analyzer.scope, item_iid);
+
+            if let Some(item_did) = analyzer.declarations.get_did(item_key) {
+                let already_declared_span = analyzer.declarations.first_declaration(item_did).span;
+                analyzer.errors.push(
                     AnalysisError::DuplicateItem {
                         already_declared_span: already_declared_span.into(),
-                        duplicate_span: ident_span.into(),
+                        duplicate_span: item_span.into(),
                     }
                     .into(),
                 );
-                continue;
             }
-            self.analyzer.declarations.insert(key, ident_span, is_ty);
+
+            analyzer.declarations.insert(item_key, item_span, is_ty);
         }
 
-        for item in &self.ast.items {
+        for item in items {
             match item {
-                Item::Packing(packing) => self.analyzer.register_packing(packing),
+                Item::Packing(packing) => analyzer.register_packing(packing),
                 Item::Aor(aor) => todo!(),
                 Item::Procedure(procedure) => todo!(),
                 Item::Methods(methods) => todo!(),
@@ -98,32 +104,99 @@ impl<'a> AstAnalyzer<'a> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Analyzer<'a> {
     scope: ScopeId,
     idents: IdentStore<'a>,
     declarations: DeclarationStore,
     symbols: SymbolStore,
+    errors: Vec<Report>,
 }
 
 impl Analyzer<'_> {
-    ///only called by collect top level declarations, and thus the declaration must already be
-    ///inserted
+    ///panics if packing was not already inserted, in both identstore(a call to 'contains' just for checking logic)
+    ///and declarationstore
+    ///doesnt check if the packing is already initialized, so the caller must make sure thats
+    ///not the case
+    ///NOTE: calls get_dinfo once, thus moving the 'at' pointer for packing declaration by 1
     fn register_packing(&mut self, packing: &Packing) -> miette::Result<DeclarationId> {
         let packing_iid = self.idents.contains(packing.ident.0).unwrap();
         let packing_key = DeclarationKey::new(self.scope, packing_iid);
-        let packing_did = self.declarations.getid(packing_key).unwrap();
+        let packing_did = self.declarations.get_did(packing_key).unwrap();
 
         let mut symbols = Vec::new();
         for field in &packing.fields {
-            symbols.push(self.register_field(field, packing_did)?);
+            if let Some(sid) = self.register_field(field, packing_did)? {
+                symbols.push(sid);
+            }
         }
 
-        let packing_info = self.declarations.getmutinfo(packing_did, 0).unwrap();
+        let packing_info = self.declarations.get_dinfo(packing_did);
         packing_info.ty = DeclarationType::Packing(symbols);
         Ok(packing_did)
     }
 
+    ///doesnt check if the field is already initialized, so the caller must make sure thats
+    ///not the case
+    ///NOTE: calls get_sinfo once, thus moving the 'at' pointer for field declaration by 1
+    fn register_field(
+        &mut self,
+        field: &Field,
+        did: DeclarationId,
+    ) -> miette::Result<Option<SymbolId>> {
+        let field_span = field.ident.0;
+        let field_iid = self.idents.insert(field_span);
+        let field_key = SymbolKey::new(self.scope, did, field_iid);
+
+        if let Some(field_sid) = self.symbols.get_sid(field_key) {
+            let already_declared_span = self.symbols.first_declaration(field_sid).span.into();
+            self.errors.push(
+                AnalysisError::DuplicateField {
+                    already_declared_span,
+                    duplicate_span: field_span.into(),
+                }
+                .into(),
+            );
+
+            let f = self.symbols.insert(field_key, field_span);
+            debug_assert_eq!(f, field_sid);
+
+            let field_type = self.symbol_type(field);
+            let field_info = self.symbols.get_sinfo(field_sid);
+            field_info.ty = field_type;
+
+            return Ok(None);
+        }
+
+        let field_sid = self.symbols.insert(field_key, field_span);
+        let field_type = self.symbol_type(field);
+        let field_info = self.symbols.get_sinfo(field_sid);
+        field_info.ty = field_type;
+
+        Ok(Some(field_sid))
+    }
+
+    fn symbol_type(&mut self, field: &Field) -> SymbolType {
+        match &field.ty {
+            IdentTy::Type(spanned_ty) => SymbolType::BuiltInType(*spanned_ty),
+            IdentTy::Ident(spanned_ident) => {
+                let type_span = spanned_ident.0;
+                //do handling here
+                let type_iid = self.idents.contains(type_span).expect("undefined type");
+                let type_key = DeclarationKey::new(self.scope, type_iid);
+                let type_did = self.declarations.get_did(type_key).expect("not a type");
+                let type_info = self.declarations.dinfo(type_did);
+
+                if !matches!(type_info.ty, DeclarationType::PendingType) {
+                    panic!("an item but not a type");
+                }
+
+                SymbolType::UserDefinedType(type_did)
+            }
+            IdentTy::Arr(spanned_arr) => todo!(),
+            IdentTy::Ptr(spanned_ptr) => todo!(),
+        }
+    }
     // fn register_aor(&mut self, aor: &Aor) -> DeclarationId {
     //     let packing_span = aor.ident.0;
     //     let packing_ident = self
@@ -167,42 +240,18 @@ impl Analyzer<'_> {
     //     //symbol id
     //     todo!()
     // }
-
-    ///interpretation matters, as an ident can be both symbol as well as item
-    fn register_field(&mut self, field: &Field, did: DeclarationId) -> miette::Result<SymbolId> {
-        let field_span = field.ident.0;
-        let field_iid = self.idents.insert(field_span);
-        let field_key = SymbolKey::new(self.scope, did, field_iid);
-        if self.symbols.getid(field_key).is_some() {
-            panic!("multiple same named symbol");
-        }
-        let field_sid = self.symbols.insert(field_key, field_span);
-
-        let new_field_type = match &field.ty {
-            IdentTy::Type(spanned_ty) => SymbolType::BuiltInType(*spanned_ty),
-            IdentTy::Ident(spanned_ident) => {
-                let type_span = spanned_ident.0;
-                let type_ident = self.idents.contains(type_span).expect("undefined type");
-                let key = DeclarationKey::new(self.scope, type_ident);
-                let type_id = self.declarations.getid(key).expect("not a type");
-                let type_info = self.declarations.getmutinfo(type_id, 0).unwrap();
-
-                if !matches!(type_info.ty, DeclarationType::PendingType) {
-                    panic!("an item but not a type");
-                }
-
-                SymbolType::UserDefinedType(type_id)
-            }
-            IdentTy::Arr(spanned_arr) => todo!(),
-            IdentTy::Ptr(spanned_ptr) => todo!(),
-        };
-
-        let field_info = self
-            .symbols
-            .getmutinfo(field_sid, 0)
-            .expect("just manufactured the id");
-
-        field_info.ty = new_field_type;
-        Ok(field_sid)
-    }
 }
+
+// struct Foo {
+//     a: i32,
+//     a: u32,
+//     b: String,
+// }
+//
+// fn foo() {
+//     let a = Foo {
+//         a: 1,
+//         b: String::new(),
+//     };
+//     a;
+// }

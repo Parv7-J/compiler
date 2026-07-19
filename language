@@ -4,10 +4,13 @@ packing UsesFoo {
 }
 
 packing UsesFoo {
+    name(string),
+    name(i32)
 }
 
 packing Foo {
     name(string),
     age(u32),
-    id(isize)
+    id(isize),
+    age(u32)
 }

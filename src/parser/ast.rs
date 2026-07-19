@@ -18,7 +18,7 @@ pub enum Item {
 }
 
 impl Item {
-    pub fn get_ident_span(&self) -> Span {
+    pub fn span(&self) -> Span {
         match self {
             Item::Packing(packing) => packing.ident.0,
             Item::Aor(aor) => aor.ident.0,
