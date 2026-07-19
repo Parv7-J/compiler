@@ -34,7 +34,9 @@ fn main() -> miette::Result<()> {
     // println!("{:#?}", ast.items);
 
     let analyzer = AstAnalyzer::new(ast);
-    analyzer.analyze();
+    let output = analyzer.analyze();
+
+    println!("{output:#?}");
 
     Ok(())
 }

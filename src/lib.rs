@@ -1,6 +1,6 @@
-mod analysis;
-mod lexer;
-mod parser;
+pub mod analysis;
+pub mod lexer;
+pub mod parser;
 
 pub use analysis::AstAnalyzer;
 pub use lexer::Lexer;

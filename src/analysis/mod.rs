@@ -9,40 +9,50 @@ pub struct AstAnalyzer<'a> {
     analyzer: Analyzer<'a>,
 }
 
+//packing Foo {a(i32), b(Bar)} -> no need for the span of 'packing', we need the span of 'Foo', we
+//need the span of 'a' and 'b', and we also need the span of 'i32', 'Bar' -> empty () will be caught
+//at parsetime, and any errors like undelimited ), or ident missing etc. etc. will be also caught at
+//parse time. so we now dont need spans of anything else as they are not necessary. But do we need
+//spans of keywords like i32 and Foo??? at parse time we remove the spans of things like delims,
+//puncts, etc. but we do track the spans of ty using spannedty and of idents using spannedident, so
+//lets keep the spans intact
+//packing Bar {brr(u32)}
+
 impl<'a> AstAnalyzer<'a> {
     pub fn new(ast: Ast<'a>) -> Self {
         let input = ast.input;
         Self {
             ast,
             analyzer: Analyzer {
-                intern: Intern::new(input),
-                item_store: ItemStore::new(),
-                symbol_store: SymbolStore::new(),
+                scope: ScopeId(0),
+                idents: IdentStore::new(input),
+                declarations: DeclarationStore::new(),
+                symbols: SymbolStore::new(),
             },
         }
     }
 
-    pub fn analyze(mut self) {
+    pub fn analyze(mut self) -> Analyzer<'a> {
         self.collect_top_level_definitions();
-        self.register_items();
-        println!("Intern: {:?}", self.analyzer.intern);
-        println!("ItemStore: {:?}", self.analyzer.item_store);
-        println!("SymbolStore: {:?}", self.analyzer.symbol_store);
+        self.register_declarations();
+        self.analyzer
     }
 
     pub fn collect_top_level_definitions(&mut self) {
         for item in &self.ast.items {
-            let intern_id: InternId = self.analyzer.intern.insert(item.get_ident_span());
-            let isty = if matches!(item, Item::Packing(_) | Item::Aor(_)) {
+            let ident_span = item.get_ident_span();
+            let ident_id = self.analyzer.idents.insert(item.get_ident_span());
+            let is_ty = if matches!(item, Item::Packing(_) | Item::Aor(_)) {
                 IsTy::Yes
             } else {
                 IsTy::No
             };
-            self.analyzer.item_store.insert(intern_id, isty);
+            let key = DeclarationKey::new(self.analyzer.scope, ident_id);
+            self.analyzer.declarations.insert(key, ident_span, is_ty);
         }
     }
 
-    pub fn register_items(&mut self) {
+    pub fn register_declarations(&mut self) {
         for item in &self.ast.items {
             match item {
                 Item::Packing(packing) => self.analyzer.register_packing(packing),
@@ -59,68 +69,119 @@ impl<'a> AstAnalyzer<'a> {
 
 #[derive(Debug, Clone)]
 pub struct Analyzer<'a> {
-    intern: Intern<'a>,
-    item_store: ItemStore,
-    symbol_store: SymbolStore,
+    scope: ScopeId,
+    idents: IdentStore<'a>,
+    declarations: DeclarationStore,
+    symbols: SymbolStore,
 }
 
 impl Analyzer<'_> {
-    fn register_packing(&mut self, packing: &Packing) -> (ItemId, Span) {
-        let packing_span = packing.ident.0;
-        let intern_id = self
-            .intern
-            .contains(packing_span)
+    fn register_packing(&mut self, packing: &Packing) -> DeclarationId {
+        let packing_iid = self
+            .idents
+            .contains(packing.ident.0)
             .expect("item must be inserted");
-        let packing_id = self
-            .item_store
-            .getid(intern_id)
+        let packing_key = DeclarationKey::new(self.scope, packing_iid);
+        let packing_did = self
+            .declarations
+            .getid(packing_key)
             .expect("item must be inserted");
+
+        assert!(self.declarations.value(packing_did).unwrap().len() == 1);
 
         let mut symbols = Vec::new();
         for field in &packing.fields {
-            symbols.push(self.register_field(field));
+            symbols.push(self.register_field(field, packing_did));
         }
 
         let packing_info = self
-            .item_store
-            .getmutinfo(packing_id)
+            .declarations
+            .getmutinfo(packing_did, 0)
             .expect("item must be inserted");
 
-        *packing_info = ItemInfo::Packing(symbols);
+        packing_info.ty = DeclarationType::Packing(symbols);
 
-        (packing_id, packing_span)
+        packing_did
     }
 
-    ///interpretation matters, as an intern can be both symbol as well as item
-    fn register_field(&mut self, field: &Field) -> (SymbolId, Span) {
-        let field_span = field.ident.0;
-        let intern_id = self.intern.insert(field_span);
-        let symbol_id = self.symbol_store.insert(intern_id);
+    // fn register_aor(&mut self, aor: &Aor) -> DeclarationId {
+    //     let packing_span = aor.ident.0;
+    //     let packing_ident = self
+    //         .idents
+    //         .contains(packing_span)
+    //         .expect("item must be inserted");
+    //     let packing_id = self
+    //         .declarations
+    //         .getid(packing_ident)
+    //         .expect("item must be inserted");
+    //
+    //     let mut symbols = Vec::new();
+    //     for variant in &aor.variants {
+    //         symbols.push(match variant {
+    //             Variant::Field(field) => self.register_field(field),
+    //             Variant::SpannedIdent(spanned_ident) => self.register_variant(spanned_ident),
+    //         })
+    //     }
+    //
+    //     let packing_info = self
+    //         .declarations
+    //         .getmutinfo(packing_id)
+    //         .expect("item must be inserted");
+    //
+    //     packing_info.ty = DeclarationType::Packing(symbols);
+    //     packing_id
+    // }
+    //
+    // fn register_variant(&mut self, ident: SpannedIdent) -> SymbolId {
+    //     let ident_span = ident.0;
+    //     let ident_id = self.idents.insert(ident_span); //we can have diff symbols, so we need diff
+    //     //id's, and not identid -> symbolid, because
+    //     //a packing Foo {foo} and a packing Bar {foo}
+    //     //-> will map to same symbol even though they
+    //     //are completely different
+    //     //but decs are goiung to be unique, so no problem there, but symbols are defined by a scope
+    //     //-> so we may use a pair of ident ids??? where the first defines the scope, and the second
+    //     //the symbol insdie that scope -> i think this would break, but dont know why -> so we do
+    //     //need scoped symboling -> and in the topmost thing, we define scopes, where each scope
+    //     //stores a symbol list  -> so instead what we can do is have a (dec id, ident id) pair-> resulting in a
+    //     //symbol id
+    //     todo!()
+    // }
 
-        let (new_symbol_info, symbol_span) = match &field.ty {
-            IdentTy::Type(spanned_ty) => (SymbolInfo::BuiltIn(spanned_ty.ty), spanned_ty.span),
+    ///interpretation matters, as an ident can be both symbol as well as item
+    fn register_field(&mut self, field: &Field, did: DeclarationId) -> SymbolId {
+        let field_span = field.ident.0;
+        let field_iid = self.idents.insert(field_span);
+        let field_key = SymbolKey::new(self.scope, did, field_iid);
+        let field_sid = self.symbols.insert(field_key, field_span);
+
+        assert!(self.symbols.value(field_sid).unwrap().len() == 1);
+
+        let new_field_type = match &field.ty {
+            IdentTy::Type(spanned_ty) => SymbolType::BuiltInType(*spanned_ty),
             IdentTy::Ident(spanned_ident) => {
                 let type_span = spanned_ident.0;
-                let intern_id = self.intern.contains(type_span).expect("undefined type");
-                let item_id = self.item_store.getid(intern_id).expect("not a type");
-                let item_info = self.item_store.getmutinfo(item_id).unwrap();
+                let type_ident = self.idents.contains(type_span).expect("undefined type");
+                let key = DeclarationKey::new(self.scope, type_ident);
+                let type_id = self.declarations.getid(key).expect("not a type");
+                let type_info = self.declarations.getmutinfo(type_id, 0).unwrap();
 
-                if !matches!(*item_info, ItemInfo::PendingType) {
+                if !matches!(type_info.ty, DeclarationType::PendingType) {
                     panic!("an item but not a type");
                 }
 
-                (SymbolInfo::Type(item_id), type_span)
+                SymbolType::UserDefinedType(type_id)
             }
             IdentTy::Arr(spanned_arr) => todo!(),
             IdentTy::Ptr(spanned_ptr) => todo!(),
         };
 
-        let symbol_info = self
-            .symbol_store
-            .getmutinfo(symbol_id)
+        let field_info = self
+            .symbols
+            .getmutinfo(field_sid, 0)
             .expect("just manufactured the id");
 
-        *symbol_info = new_symbol_info;
-        (symbol_id, symbol_span)
+        field_info.ty = new_field_type;
+        field_sid
     }
 }

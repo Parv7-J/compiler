@@ -6,5 +6,6 @@ packing UsesFoo {
 packing Foo {
     name(string),
     age(u32),
-    id(isize)
+    id(isize),
+    name(UsesFoo)
 }
