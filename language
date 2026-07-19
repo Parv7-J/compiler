@@ -3,9 +3,11 @@ packing UsesFoo {
     classes(string)
 }
 
+packing UsesFoo {
+}
+
 packing Foo {
     name(string),
     age(u32),
-    id(isize),
-    name(UsesFoo)
+    id(isize)
 }

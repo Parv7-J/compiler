@@ -20,6 +20,20 @@ pub struct SymbolId(pub usize);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ScopeId(pub usize);
 
+// ///we can have multiple declarations for the same scope level ->
+// ///fn foo() {
+// ///     {
+// ///         let a = 1;
+// ///     }
+// ///     {
+// ///         let a = String::new();
+// ///     }
+// /// }
+// #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+// pub struct RedeclarationId(pub usize);
+
+//when we enter a new scope again, we add one to the redec id
+//or if we try to enter again
 #[derive(Debug, Clone)]
 pub struct IdentStore<'a> {
     pub input: &'a str,
