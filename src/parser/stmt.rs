@@ -19,24 +19,28 @@ impl Parser<'_> {
                 self.expect(TokenKind::Punctuation(Punctuation::Semicolon))?;
                 Ok(Stmt::Continue(token.span))
             }
-            _ => self.parse_dec_or_exprstmt(),
+            _ => {
+                if self.is_declaration() {
+                    self.parse_declaration()
+                } else {
+                    self.parse_exprstmt()
+                }
+            }
         }
     }
 
-    pub fn parse_dec_or_exprstmt(&mut self) -> miette::Result<Stmt> {
-        let tokenlist = self.lexer.clone();
-        for token in tokenlist {
-            match token.kind {
-                TokenKind::Operator(Operator::Assign) => {
-                    return self.parse_declaration();
-                }
-                TokenKind::Punctuation(Punctuation::Semicolon) => {
-                    return self.parse_exprstmt();
-                }
-                _ => {}
-            }
+    pub fn is_declaration(&mut self) -> bool {
+        let mut parser = Parser {
+            lexer: self.lexer.clone(),
+            token: self.token,
+            errors: vec![],
+        };
+
+        if parser.parse_identty().is_ok() && parser.parse_ident().is_ok() {
+            return true;
         }
-        todo!("failed to find a semi or an assign -> stream ended")
+
+        false
     }
 
     pub fn parse_declaration(&mut self) -> miette::Result<Stmt> {
@@ -59,9 +63,7 @@ impl Parser<'_> {
         self.expect(TokenKind::Keyword(Keyword::If))?;
         let condition = self.parse_expr()?;
         println!("condition: {condition:?}");
-        self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;
         let block = self.parse_block()?;
-        self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
         let ifs = Conditional { condition, block };
         let (elseifs, elses) = self.parse_else()?;
         Ok(Stmt::Conditional {
@@ -83,9 +85,7 @@ impl Parser<'_> {
                         Some(TokenKind::Keyword(Keyword::If)) => {
                             self.next();
                             let condition = self.parse_expr()?;
-                            self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;
                             let block = self.parse_block()?;
-                            self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
                             elseifs.push(Conditional { condition, block });
                         }
                         _ => {
@@ -114,9 +114,7 @@ impl Parser<'_> {
             Some(TokenKind::Keyword(Keyword::Range)) => {
                 self.next();
                 let range = self.parse_range()?;
-                self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;
                 let block = self.parse_block()?;
-                self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
                 Ok(Stmt::For {
                     ident,
                     ty,
@@ -127,9 +125,7 @@ impl Parser<'_> {
             }
             _ => {
                 let inn = self.parse_ident()?;
-                self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;
                 let block = self.parse_block()?;
-                self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
                 Ok(Stmt::For {
                     ident,
                     ty,
@@ -144,9 +140,7 @@ impl Parser<'_> {
     pub fn parse_while(&mut self) -> miette::Result<Stmt> {
         self.expect(TokenKind::Keyword(Keyword::While))?;
         let condition = self.parse_expr()?;
-        self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;
         let block = self.parse_block()?;
-        self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
         Ok(Stmt::While { condition, block })
     }
 }

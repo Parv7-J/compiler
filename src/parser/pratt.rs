@@ -65,6 +65,7 @@ impl Parser<'_> {
                     span: token.span,
                 }))
             }
+            TokenKind::Keyword(Keyword::This) => Expr::Atom(Atom::This(token.span)),
             TokenKind::String | TokenKind::Number => Expr::Atom(token.into()),
             TokenKind::Operator(op) => {
                 let ((), r_bp) = prefix_binding_power(op).unwrap();
@@ -107,7 +108,6 @@ impl Parser<'_> {
                 }
                 TokenKind::Delimiter(delim) => {
                     if delim == Delimiter::ParenOpen {
-                        println!("here fam");
                         let l_bp = 19;
                         if l_bp < min_bp {
                             break;

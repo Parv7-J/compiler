@@ -109,9 +109,7 @@ impl Parser<'_> {
             return_value = Some(self.parse_identty()?);
         }
 
-        self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;
         let body = self.parse_block()?;
-        self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
 
         Ok(Procedure {
             ident,

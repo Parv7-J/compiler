@@ -30,13 +30,12 @@ fn main() -> miette::Result<()> {
 
     let parser = Parser::new(lexer);
     let ast = parser.parse(&fname);
-
-    // println!("{:#?}", ast.items);
-
-    let analyzer = AstAnalyzer::new(ast);
-    let output = analyzer.analyze();
-
-    println!("{output:#?}");
-
+    println!("{:#?}", ast);
+    //
+    // let analyzer = AstAnalyzer::new(ast);
+    // let output = analyzer.analyze();
+    //
+    // println!("{output:#?}");
+    //
     Ok(())
 }

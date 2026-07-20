@@ -15,6 +15,7 @@ pub enum Item {
     Api(Api),
     Require(Require),
     Get(Get),
+    Block(Block),
 }
 
 impl Item {
@@ -27,6 +28,7 @@ impl Item {
             Item::Api(api) => api.ident.0,
             Item::Require(require) => require.ident.0,
             Item::Get(get) => get.module.0,
+            Item::Block(_) => panic!("block aint got no ident"),
         }
     }
 }
@@ -60,6 +62,7 @@ pub enum Atom {
     Ident(SpannedIdent),
     Number(Span),
     Boolean(SpannedBoolean),
+    This(Span),
 }
 
 #[derive(Debug, Clone)]

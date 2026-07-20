@@ -16,13 +16,13 @@ mod pratt;
 mod stmt;
 
 pub struct Parser<'a> {
-    pub lexer: Lexer<'a, std::str::Chars<'a>>,
+    pub lexer: Lexer<'a>,
     pub token: Option<Token>,
     pub errors: Vec<miette::Report>,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(lexer: Lexer<'a, std::str::Chars<'a>>) -> Self {
+    pub fn new(lexer: Lexer<'a>) -> Self {
         Self {
             lexer,
             token: None,
@@ -105,12 +105,6 @@ impl<'a> Parser<'a> {
             .expect("only called after peek")
     }
 
-    fn fake_consume(&mut self) -> Token {
-        self.token
-            .or_else(|| self.lexer.clone().next())
-            .expect("only called after peek")
-    }
-
     fn parse_item(&mut self) -> miette::Result<Item> {
         let item = match self
             .peek()
@@ -123,6 +117,9 @@ impl<'a> Parser<'a> {
             TokenKind::Keyword(Keyword::Aor) => Item::Aor(self.parse_aor()?),
             TokenKind::Keyword(Keyword::Packing) => Item::Packing(self.parse_packing()?),
             TokenKind::Keyword(Keyword::Api) => Item::Api(self.parse_api()?),
+            TokenKind::Delimiter(Delimiter::CurlyOpen) => {
+                Item::Block(self.parse_block()?)
+            }
             kind => return Err(ParseError::TopLevelNonItem {kind, span: self.next().unwrap().span.into() }.into())
         };
         Ok(item)
@@ -132,7 +129,7 @@ impl<'a> Parser<'a> {
         match self.peek() {
             Some(token_kind) if token_kind == kind => Ok(self.consume()),
             Some(_) => {
-                let token = self.fake_consume();
+                let token = self.token.or_else(|| self.lexer.clone().next()).unwrap();
                 Err(ParseError::Unexpected {
                     expected: Expected::Kind(kind),
                     found: Found::Kind(token.kind),

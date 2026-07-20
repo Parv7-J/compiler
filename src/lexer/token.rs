@@ -64,6 +64,7 @@ pub enum Boolean {
 pub enum Keyword {
     Type(Ty),
     Boolean(Boolean),
+    This,
     If,
     Else,
     While,
@@ -184,6 +185,7 @@ impl<'a> TryFrom<&'a str> for Keyword {
             "usize" => Self::Type(Ty::Unsigned(BitWidth::Word)),
             "f32" => Self::Type(Ty::Float32),
             "f64" => Self::Type(Ty::Float64),
+            "this" => Self::This,
             "if" => Self::If,
             "else" => Self::Else,
             "while" => Self::While,
@@ -372,6 +374,7 @@ impl std::fmt::Display for Keyword {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             Keyword::Type(ty) => return write!(f, "{ty}"),
+            Keyword::This => "this",
             Keyword::If => "if",
             Keyword::Else => "else",
             Keyword::While => "while",

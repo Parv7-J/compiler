@@ -129,9 +129,12 @@ pub enum DeclarationType {
     ResolvedType(ResolvedType),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Resolved {
-    Procedure,
+    Procedure {
+        arguments: HashMap<IdentId, SymbolId>,
+        return_ty: Option<SymbolType>,
+    },
     Methods,
     Api,
     Require,

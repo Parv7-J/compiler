@@ -7,41 +7,30 @@ use crate::parser::error::ParseError;
 
 impl Parser<'_> {
     pub fn parse_block(&mut self) -> miette::Result<Block> {
+        self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;
         let mut block = Vec::new();
-        loop {
-            let token = self.peek();
-            if token == Some(TokenKind::Delimiter(Delimiter::CurlyClose)) {
-                break;
+        while !matches!(
+            self.peek(),
+            Some(TokenKind::Delimiter(Delimiter::CurlyClose)),
+        ) {
+            if matches!(
+                self.peek(),
+                Some(TokenKind::Delimiter(Delimiter::CurlyOpen))
+            ) {
+                block.push(BlockItem::Item(Item::Block(self.parse_block()?)));
+                continue;
             }
-            let Some(TokenKind::Keyword(keyword)) = token else {
+            let Some(TokenKind::Keyword(keyword)) = self.peek() else {
                 block.push(BlockItem::Stmt(self.parse_stmt()?));
                 continue;
             };
             let item = match keyword {
-                Keyword::Proc => {
-                    let proc = self.parse_proc()?;
-                    Item::Procedure(proc)
-                }
-                Keyword::Methods => {
-                    let methods = self.parse_methods()?;
-                    Item::Methods(methods)
-                }
-                Keyword::Require => {
-                    let require = self.parse_require()?;
-                    Item::Require(require)
-                }
-                Keyword::Aor => {
-                    let aor = self.parse_aor()?;
-                    Item::Aor(aor)
-                }
-                Keyword::Packing => {
-                    let packing = self.parse_packing()?;
-                    Item::Packing(packing)
-                }
-                Keyword::Api => {
-                    let api = self.parse_api()?;
-                    Item::Api(api)
-                }
+                Keyword::Proc => Item::Procedure(self.parse_proc()?),
+                Keyword::Methods => Item::Methods(self.parse_methods()?),
+                Keyword::Require => Item::Require(self.parse_require()?),
+                Keyword::Aor => Item::Aor(self.parse_aor()?),
+                Keyword::Packing => Item::Packing(self.parse_packing()?),
+                Keyword::Api => Item::Api(self.parse_api()?),
                 _ => {
                     block.push(BlockItem::Stmt(self.parse_stmt()?));
                     continue;
@@ -49,6 +38,8 @@ impl Parser<'_> {
             };
             block.push(BlockItem::Item(item));
         }
+        self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))
+            .unwrap();
         Ok(Block(block))
     }
 

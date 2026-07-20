@@ -1,4 +1,10 @@
-#![allow(unused)]
+//TODO: right now duplicate declarations are cooking us, as the analyzer is thinking there is only
+//one declaration while doing symbol resolution
+//i.e it doesnt understand the diff between a same named field in two diff structs of the same name,
+//and a same named field in the same struct -> as symbols are being ided by sid, iid, did
+//maybe the fix is to have the struct store a mapping of iid -> vec<sid>
+//not a big bug but needs to be fixed
+
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{lexer::token::Span, parser::ast::*};
@@ -94,11 +100,12 @@ impl<'a> AstAnalyzer<'a> {
             match item {
                 Item::Packing(packing) => analyzer.register_packing(packing),
                 Item::Aor(aor) => analyzer.register_aor(aor),
-                Item::Procedure(procedure) => todo!(),
-                Item::Methods(methods) => todo!(),
-                Item::Api(api) => todo!(),
-                Item::Require(require) => todo!(),
-                Item::Get(get) => todo!(),
+                Item::Procedure(procedure) => analyzer.register_procedure(procedure),
+                Item::Methods(_methods) => todo!(),
+                Item::Api(_api) => todo!(),
+                Item::Require(_require) => todo!(),
+                Item::Get(_get) => todo!(),
+                Item::Block(_) => unreachable!(),
             };
         }
     }
@@ -114,35 +121,113 @@ pub struct Analyzer<'a> {
 }
 
 impl Analyzer<'_> {
-    ///panics if packing was not already inserted, in both identstore(a call to 'contains' just for checking logic)
-    ///and declarationstore
-    ///doesnt check if the packing is already initialized, so the caller must make sure thats
-    ///not the case
-    ///NOTE: calls get_dinfo once, thus moving the 'at' pointer for packing declaration by 1
-    fn register_packing(&mut self, packing: &Packing) -> DeclarationId {
-        let packing_iid = self.idents.contains(packing.ident.0).unwrap();
-        let packing_key = DeclarationKey::new(self.scope, packing_iid);
-        let packing_did = self.declarations.get_did(packing_key).unwrap();
+    fn register_procedure(&mut self, procedure: &Procedure) {
+        let procedure_did = self.did(procedure.ident.0);
+        let mut arguments = HashMap::new();
 
+        for arg in &procedure.args {
+            if let Some((iid, sid)) = self.register_field(arg, procedure_did) {
+                arguments.insert(iid, sid);
+            }
+        }
+
+        let return_ty = procedure
+            .return_value
+            .as_ref()
+            .map(|ty| self.symbol_type(ty));
+
+        let procedure_info = self.declarations.get_dinfo(procedure_did);
+        procedure_info.ty = DeclarationType::Resolved(Resolved::Procedure {
+            arguments,
+            return_ty,
+        });
+    }
+
+    // fn register_methods(&mut self, methods: &Methods) {
+    //     let procedure_did = self.did(methods.ident.0);
+    //     let mut arguments = HashMap::new();
+    //
+    //     for arg in &procedure.args {
+    //         if let Some((iid, sid)) = self.register_field(arg, procedure_did) {
+    //             arguments.insert(iid, sid);
+    //         }
+    //     }
+    //
+    //     let return_ty = procedure
+    //         .return_value
+    //         .as_ref()
+    //         .map(|ty| self.symbol_type(ty));
+    //
+    //     let procedure_info = self.declarations.get_dinfo(procedure_did);
+    //     procedure_info.ty = DeclarationType::Resolved(Resolved::Procedure {
+    //         arguments,
+    //         return_ty,
+    //     });
+    // }
+
+    fn register_api(&mut self, procedure: &Procedure) {
+        let procedure_did = self.did(procedure.ident.0);
+        let mut arguments = HashMap::new();
+
+        for arg in &procedure.args {
+            if let Some((iid, sid)) = self.register_field(arg, procedure_did) {
+                arguments.insert(iid, sid);
+            }
+        }
+
+        let return_ty = procedure
+            .return_value
+            .as_ref()
+            .map(|ty| self.symbol_type(ty));
+
+        let procedure_info = self.declarations.get_dinfo(procedure_did);
+        procedure_info.ty = DeclarationType::Resolved(Resolved::Procedure {
+            arguments,
+            return_ty,
+        });
+    }
+
+    fn register_require(&mut self, procedure: &Procedure) {
+        let procedure_did = self.did(procedure.ident.0);
+        let mut arguments = HashMap::new();
+
+        for arg in &procedure.args {
+            if let Some((iid, sid)) = self.register_field(arg, procedure_did) {
+                arguments.insert(iid, sid);
+            }
+        }
+
+        let return_ty = procedure
+            .return_value
+            .as_ref()
+            .map(|ty| self.symbol_type(ty));
+
+        let procedure_info = self.declarations.get_dinfo(procedure_did);
+        procedure_info.ty = DeclarationType::Resolved(Resolved::Procedure {
+            arguments,
+            return_ty,
+        });
+    }
+
+    fn register_packing(&mut self, packing: &Packing) {
+        //TODO: dont register the packing as it wont even be used?, and type checking is done normally
+        //like that only
+        let packing_did = self.did(packing.ident.0);
         let mut symbols = HashMap::new();
+
         for field in &packing.fields {
             if let Some((iid, sid)) = self.register_field(field, packing_did) {
                 symbols.insert(iid, sid);
             }
         }
 
-        let packing_info = self.declarations.get_dinfo(packing_did);
-        packing_info.ty = DeclarationType::ResolvedType(ResolvedType::Packing(symbols));
-        packing_did
+        self.resolve(packing_did, ResolvedType::Packing(symbols));
     }
 
-    ///see register_packing
-    fn register_aor(&mut self, aor: &Aor) -> DeclarationId {
-        let aor_iid = self.idents.contains(aor.ident.0).unwrap();
-        let aor_key = DeclarationKey::new(self.scope, aor_iid);
-        let aor_did = self.declarations.get_did(aor_key).unwrap();
-
+    fn register_aor(&mut self, aor: &Aor) {
+        let aor_did = self.did(aor.ident.0);
         let mut symbols = HashMap::new();
+
         for variant in &aor.variants {
             match variant {
                 Variant::Field(field) => {
@@ -176,9 +261,7 @@ impl Analyzer<'_> {
             }
         }
 
-        let aor_info = self.declarations.get_dinfo(aor_did);
-        aor_info.ty = DeclarationType::ResolvedType(ResolvedType::Aor(symbols));
-        aor_did
+        self.resolve(aor_did, ResolvedType::Aor(symbols));
     }
 
     ///doesnt check if the field is already initialized, so the caller must make sure thats
@@ -190,6 +273,7 @@ impl Analyzer<'_> {
         let field_key = SymbolKey::new(self.scope, did, field_iid);
 
         if let Some(field_sid) = self.symbols.get_sid(field_key) {
+            //here we need to actually store dup fields, as they may belong to dup items
             let already_declared_span = self.symbols.first_declaration(field_sid).span.into();
             self.errors.push(
                 AnalysisError::DuplicateField {
@@ -226,6 +310,7 @@ impl Analyzer<'_> {
                         return SymbolType::Error { span: adt_span };
                     }
                 };
+
                 let adt_key = DeclarationKey::new(self.scope, adt_iid);
                 let adt_did = match self.declarations.get_did(adt_key) {
                     Some(did) => did,
@@ -241,7 +326,6 @@ impl Analyzer<'_> {
                 };
 
                 let adt_info = self.declarations.dinfo(adt_did);
-
                 if !matches!(
                     adt_info.ty,
                     DeclarationType::PendingType | DeclarationType::ResolvedType(_)
@@ -279,18 +363,20 @@ impl Analyzer<'_> {
             }
         }
     }
-}
 
-// struct Foo {
-//     a: i32,
-//     a: u32,
-//     b: String,
-// }
-//
-// fn foo() {
-//     let a = Foo {
-//         a: 1,
-//         b: String::new(),
-//     };
-//     a;
-// }
+    ///panics if span was not already inserted, in both identstore(a call to 'contains' just for checking logic)
+    ///and declarationstore
+    fn did(&mut self, span: Span) -> DeclarationId {
+        let iid = self.idents.contains(span).unwrap();
+        let key = DeclarationKey::new(self.scope, iid);
+        self.declarations.get_did(key).unwrap()
+    }
+
+    ///doesnt check if the packing is already initialized, so the caller must make sure thats
+    ///not the case
+    ///NOTE: calls get_dinfo once, thus moving the 'at' pointer for packing declaration by 1
+    fn resolve(&mut self, did: DeclarationId, resolved_type: ResolvedType) {
+        let info = self.declarations.get_dinfo(did);
+        info.ty = DeclarationType::ResolvedType(resolved_type);
+    }
+}

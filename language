@@ -1,16 +1,23 @@
+//TODO: remove empty methods block error
+
 packing Foo{
-    bar(Bar),
-    classes(string)
+    first(i32),
+    last(i32)
 }
 
-aor Bar{
-    One,
-    Two(i32)
-}
+methods Foo {
+    //provide an implicit return
+    proc init[first(i32), last(i32)] {
+        this.first = first;
+        this.last = last;
+    }
 
-packing New {
-    a(i32),
-    b(i32),
-    b(Bar),
-    classes(i32)
+    //gets a 'this' , which is a pointer to the struct with which this fn is called
+    proc foo[a(i32),b(u32)]: i32 {}
+
+    proc destroy[] {
+       //implicit memory freeing, so any new call with the struct would be use after free
+    }
+
+    //init is required, no need to require destroy
 }

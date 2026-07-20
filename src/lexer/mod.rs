@@ -3,11 +3,11 @@ use token::*;
 
 pub const EOF_CHAR: char = '\0';
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct Lexer<'a, I> {
+#[derive(Debug, Clone)]
+pub struct Lexer<'a> {
     pub input: &'a str,
     pub at: u32,
-    pub chars: I,
+    pub chars: std::str::Chars<'a>,
     pub state: State,
     pub newlines: Vec<u32>,
 }
@@ -29,7 +29,7 @@ pub enum Started {
     MultiLineComment,
 }
 
-impl<'a> Iterator for Lexer<'a, std::str::Chars<'a>> {
+impl<'a> Iterator for Lexer<'a> {
     type Item = Token;
     fn next(&mut self) -> Option<Token> {
         match self.advance_token() {
@@ -39,7 +39,7 @@ impl<'a> Iterator for Lexer<'a, std::str::Chars<'a>> {
     }
 }
 
-impl<'a> Lexer<'a, std::str::Chars<'a>> {
+impl<'a> Lexer<'a> {
     #[allow(clippy::result_unit_err)]
     pub fn new(input: &'a str) -> Result<Self, ()> {
         if input.len() > u32::MAX as usize {
