@@ -121,20 +121,27 @@ impl Parser<'_> {
     }
 
     fn parse_arr(&mut self) -> miette::Result<SpannedArr> {
-        let arr = match self.next().unwrap() {
+        let (arr_ty, span) = match self.next().unwrap() {
             Token {
                 kind: TokenKind::Keyword(Keyword::Type(ty)),
                 span,
-            } => (ty, span),
+            } => {
+                let arr_ty = match ty {
+                    Ty::Arr => ArrType::Arr,
+                    Ty::HeapArr => ArrType::HeapArr,
+                    _ => unreachable!(),
+                };
+                (arr_ty, span)
+            }
             _ => unreachable!(),
         };
         self.expect(TokenKind::Delimiter(Delimiter::SquareOpen))?;
         let inner_ty = self.parse_identty()?;
         self.expect(TokenKind::Delimiter(Delimiter::SquareClose))?;
         Ok(SpannedArr {
-            ty: arr.0,
+            arr_ty,
             inner_ty: Box::new(inner_ty),
-            span: arr.1,
+            span,
         })
     }
 

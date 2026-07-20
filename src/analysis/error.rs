@@ -23,6 +23,28 @@ pub enum AnalysisError {
         #[label("field already defined with the same name")]
         already_declared_span: SourceSpan,
     },
+    #[error("Duplicate Variant Name")]
+    #[diagnostic(help("rename a variant"))]
+    DuplicateVariant {
+        #[label("duplicate variant")]
+        duplicate_span: SourceSpan,
+        #[label("variant already defined with the same name")]
+        already_declared_span: SourceSpan,
+    },
+    #[error("Undefined Type")]
+    #[diagnostic(help("define the type"))]
+    UndefinedType {
+        #[label("type definition not found ")]
+        span: SourceSpan,
+    },
+    #[error("Not a Type")]
+    #[diagnostic(help("use a different name for the type"))]
+    NotAType {
+        #[label("referenced here")]
+        span: SourceSpan,
+        #[label("item, not a type")]
+        item_span: SourceSpan,
+    },
 }
 
 #[derive(Debug)]

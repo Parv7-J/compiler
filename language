@@ -1,16 +1,16 @@
-packing UsesFoo {
-    foofield(Foo),
+packing Foo{
+    bar(Bar),
     classes(string)
 }
 
-packing UsesFoo {
-    name(string),
-    name(i32)
+aor Bar{
+    One,
+    Two(i32)
 }
 
-packing Foo {
-    name(string),
-    age(u32),
-    id(isize),
-    age(u32)
+packing New {
+    a(i32),
+    b(i32),
+    b(Bar),
+    classes(i32)
 }

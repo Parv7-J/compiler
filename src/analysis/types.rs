@@ -123,15 +123,29 @@ pub struct DeclarationInfo {
 
 #[derive(Debug, Clone)]
 pub enum DeclarationType {
+    Pending,
+    Resolved(Resolved),
     PendingType,
-    PendingNonType,
-    Packing(Vec<SymbolId>),
-    Aor,
+    ResolvedType(ResolvedType),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Resolved {
     Procedure,
     Methods,
     Api,
     Require,
     Get,
+}
+
+//foo.a
+//get the type for foo -> Vec<SymbolId>,
+//get the type for a -> i think we need an ident id to symbolid map here
+
+#[derive(Debug, Clone)]
+pub enum ResolvedType {
+    Packing(HashMap<IdentId, SymbolId>),
+    Aor(HashMap<IdentId, SymbolId>),
 }
 
 pub enum IsTy {
@@ -160,7 +174,7 @@ impl DeclarationStore {
                     },
                     IsTy::No => DeclarationInfo {
                         span,
-                        ty: DeclarationType::PendingNonType,
+                        ty: DeclarationType::Pending,
                     },
                 };
                 self.db[occupied_entry.get().0].info.push(declaration_info);
@@ -176,7 +190,7 @@ impl DeclarationStore {
                     },
                     IsTy::No => DeclarationInfo {
                         span,
-                        ty: DeclarationType::PendingNonType,
+                        ty: DeclarationType::Pending,
                     },
                 };
                 self.db.push(DeclarationEntry::new(declaration_info));
@@ -207,7 +221,6 @@ impl DeclarationStore {
         //SAFETY: starts at 0, and thus always starts at 1, and 1 - 1 = 0
         //OVERFLOW: can overflow, if we change the type for memory efficiency
         entry.at += 1;
-        dbg!(entry.at);
         &mut entry.info[entry.at - 1]
     }
 
@@ -255,18 +268,30 @@ impl SymbolEntry {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SymbolInfo {
     pub span: Span,
     pub ty: SymbolType,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SymbolType {
     Pending,
     Variant,
     BuiltInType(SpannedTy),
     UserDefinedType(DeclarationId),
+    ArrType {
+        arr_ty: ArrType,
+        span: Span,
+        inner_ty: Box<SymbolType>,
+    },
+    PtrType {
+        ty: Box<SymbolType>,
+        span: Span,
+    },
+    Error {
+        span: Span,
+    },
 }
 
 impl SymbolStore {
@@ -323,6 +348,7 @@ impl SymbolStore {
         //SAFETY: starts at 0, and thus always starts at 1, and 1 - 1 = 0
         //OVERFLOW: can overflow, if we change the type for memory efficiency
         entry.at += 1;
+        dbg!(entry.at);
         &mut entry.info[entry.at - 1]
     }
 }

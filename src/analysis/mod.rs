@@ -1,5 +1,5 @@
 #![allow(unused)]
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{lexer::token::Span, parser::ast::*};
 
@@ -93,7 +93,7 @@ impl<'a> AstAnalyzer<'a> {
         for item in items {
             match item {
                 Item::Packing(packing) => analyzer.register_packing(packing),
-                Item::Aor(aor) => todo!(),
+                Item::Aor(aor) => analyzer.register_aor(aor),
                 Item::Procedure(procedure) => todo!(),
                 Item::Methods(methods) => todo!(),
                 Item::Api(api) => todo!(),
@@ -119,31 +119,72 @@ impl Analyzer<'_> {
     ///doesnt check if the packing is already initialized, so the caller must make sure thats
     ///not the case
     ///NOTE: calls get_dinfo once, thus moving the 'at' pointer for packing declaration by 1
-    fn register_packing(&mut self, packing: &Packing) -> miette::Result<DeclarationId> {
+    fn register_packing(&mut self, packing: &Packing) -> DeclarationId {
         let packing_iid = self.idents.contains(packing.ident.0).unwrap();
         let packing_key = DeclarationKey::new(self.scope, packing_iid);
         let packing_did = self.declarations.get_did(packing_key).unwrap();
 
-        let mut symbols = Vec::new();
+        let mut symbols = HashMap::new();
         for field in &packing.fields {
-            if let Some(sid) = self.register_field(field, packing_did)? {
-                symbols.push(sid);
+            if let Some((iid, sid)) = self.register_field(field, packing_did) {
+                symbols.insert(iid, sid);
             }
         }
 
         let packing_info = self.declarations.get_dinfo(packing_did);
-        packing_info.ty = DeclarationType::Packing(symbols);
-        Ok(packing_did)
+        packing_info.ty = DeclarationType::ResolvedType(ResolvedType::Packing(symbols));
+        packing_did
+    }
+
+    ///see register_packing
+    fn register_aor(&mut self, aor: &Aor) -> DeclarationId {
+        let aor_iid = self.idents.contains(aor.ident.0).unwrap();
+        let aor_key = DeclarationKey::new(self.scope, aor_iid);
+        let aor_did = self.declarations.get_did(aor_key).unwrap();
+
+        let mut symbols = HashMap::new();
+        for variant in &aor.variants {
+            match variant {
+                Variant::Field(field) => {
+                    //TODO: make register_variant which pushes a duplicate variant not duplicate
+                    //field error
+                    if let Some((iid, sid)) = self.register_field(field, aor_did) {
+                        symbols.insert(iid, sid);
+                    }
+                }
+                Variant::SpannedIdent(spanned_ident) => {
+                    let variant_span = spanned_ident.0;
+                    let variant_iid = self.idents.insert(variant_span);
+                    let variant_key = SymbolKey::new(self.scope, aor_did, variant_iid);
+                    if let Some(variant_sid) = self.symbols.get_sid(variant_key) {
+                        let already_declared_span =
+                            self.symbols.first_declaration(variant_sid).span.into();
+                        self.errors.push(
+                            AnalysisError::DuplicateVariant {
+                                already_declared_span,
+                                duplicate_span: variant_span.into(),
+                            }
+                            .into(),
+                        );
+                        continue;
+                    }
+                    let variant_sid = self.symbols.insert(variant_key, variant_span);
+                    let variant_info = self.symbols.get_sinfo(variant_sid);
+                    variant_info.ty = SymbolType::Variant;
+                    symbols.insert(variant_iid, variant_sid);
+                }
+            }
+        }
+
+        let aor_info = self.declarations.get_dinfo(aor_did);
+        aor_info.ty = DeclarationType::ResolvedType(ResolvedType::Aor(symbols));
+        aor_did
     }
 
     ///doesnt check if the field is already initialized, so the caller must make sure thats
     ///not the case
     ///NOTE: calls get_sinfo once, thus moving the 'at' pointer for field declaration by 1
-    fn register_field(
-        &mut self,
-        field: &Field,
-        did: DeclarationId,
-    ) -> miette::Result<Option<SymbolId>> {
+    fn register_field(&mut self, field: &Field, did: DeclarationId) -> Option<(IdentId, SymbolId)> {
         let field_span = field.ident.0;
         let field_iid = self.idents.insert(field_span);
         let field_key = SymbolKey::new(self.scope, did, field_iid);
@@ -157,89 +198,87 @@ impl Analyzer<'_> {
                 }
                 .into(),
             );
-
-            let f = self.symbols.insert(field_key, field_span);
-            debug_assert_eq!(f, field_sid);
-
-            let field_type = self.symbol_type(field);
-            let field_info = self.symbols.get_sinfo(field_sid);
-            field_info.ty = field_type;
-
-            return Ok(None);
+            return None;
         }
 
         let field_sid = self.symbols.insert(field_key, field_span);
-        let field_type = self.symbol_type(field);
+        let field_type = self.symbol_type(&field.ty);
         let field_info = self.symbols.get_sinfo(field_sid);
         field_info.ty = field_type;
 
-        Ok(Some(field_sid))
+        Some((field_iid, field_sid))
     }
 
-    fn symbol_type(&mut self, field: &Field) -> SymbolType {
-        match &field.ty {
+    fn symbol_type(&mut self, ty: &IdentTy) -> SymbolType {
+        match ty {
             IdentTy::Type(spanned_ty) => SymbolType::BuiltInType(*spanned_ty),
             IdentTy::Ident(spanned_ident) => {
-                let type_span = spanned_ident.0;
-                //do handling here
-                let type_iid = self.idents.contains(type_span).expect("undefined type");
-                let type_key = DeclarationKey::new(self.scope, type_iid);
-                let type_did = self.declarations.get_did(type_key).expect("not a type");
-                let type_info = self.declarations.dinfo(type_did);
+                let adt_span = spanned_ident.0;
+                let adt_iid = match self.idents.contains(adt_span) {
+                    Some(iid) => iid,
+                    None => {
+                        self.errors.push(
+                            AnalysisError::UndefinedType {
+                                span: adt_span.into(),
+                            }
+                            .into(),
+                        );
+                        return SymbolType::Error { span: adt_span };
+                    }
+                };
+                let adt_key = DeclarationKey::new(self.scope, adt_iid);
+                let adt_did = match self.declarations.get_did(adt_key) {
+                    Some(did) => did,
+                    None => {
+                        self.errors.push(
+                            AnalysisError::UndefinedType {
+                                span: adt_span.into(),
+                            }
+                            .into(),
+                        );
+                        return SymbolType::Error { span: adt_span };
+                    }
+                };
 
-                if !matches!(type_info.ty, DeclarationType::PendingType) {
-                    panic!("an item but not a type");
+                let adt_info = self.declarations.dinfo(adt_did);
+
+                if !matches!(
+                    adt_info.ty,
+                    DeclarationType::PendingType | DeclarationType::ResolvedType(_)
+                ) {
+                    self.errors.push(
+                        AnalysisError::NotAType {
+                            span: adt_span.into(),
+                            item_span: adt_info.span.into(),
+                        }
+                        .into(),
+                    );
+                    return SymbolType::Error { span: adt_span };
                 }
 
-                SymbolType::UserDefinedType(type_did)
+                SymbolType::UserDefinedType(adt_did)
             }
-            IdentTy::Arr(spanned_arr) => todo!(),
-            IdentTy::Ptr(spanned_ptr) => todo!(),
+            IdentTy::Arr(spanned_arr) => {
+                let inner_ty = &spanned_arr.inner_ty;
+                let symbol_type = self.symbol_type(inner_ty);
+
+                SymbolType::ArrType {
+                    arr_ty: spanned_arr.arr_ty,
+                    inner_ty: Box::new(symbol_type),
+                    span: spanned_arr.span,
+                }
+            }
+            IdentTy::Ptr(spanned_ptr) => {
+                let inner_ty = &spanned_ptr.ty;
+                let symbol_type = self.symbol_type(inner_ty);
+
+                SymbolType::PtrType {
+                    ty: Box::new(symbol_type),
+                    span: spanned_ptr.ptr,
+                }
+            }
         }
     }
-    // fn register_aor(&mut self, aor: &Aor) -> DeclarationId {
-    //     let packing_span = aor.ident.0;
-    //     let packing_ident = self
-    //         .idents
-    //         .contains(packing_span)
-    //         .expect("item must be inserted");
-    //     let packing_id = self
-    //         .declarations
-    //         .getid(packing_ident)
-    //         .expect("item must be inserted");
-    //
-    //     let mut symbols = Vec::new();
-    //     for variant in &aor.variants {
-    //         symbols.push(match variant {
-    //             Variant::Field(field) => self.register_field(field),
-    //             Variant::SpannedIdent(spanned_ident) => self.register_variant(spanned_ident),
-    //         })
-    //     }
-    //
-    //     let packing_info = self
-    //         .declarations
-    //         .getmutinfo(packing_id)
-    //         .expect("item must be inserted");
-    //
-    //     packing_info.ty = DeclarationType::Packing(symbols);
-    //     packing_id
-    // }
-    //
-    // fn register_variant(&mut self, ident: SpannedIdent) -> SymbolId {
-    //     let ident_span = ident.0;
-    //     let ident_id = self.idents.insert(ident_span); //we can have diff symbols, so we need diff
-    //     //id's, and not identid -> symbolid, because
-    //     //a packing Foo {foo} and a packing Bar {foo}
-    //     //-> will map to same symbol even though they
-    //     //are completely different
-    //     //but decs are goiung to be unique, so no problem there, but symbols are defined by a scope
-    //     //-> so we may use a pair of ident ids??? where the first defines the scope, and the second
-    //     //the symbol insdie that scope -> i think this would break, but dont know why -> so we do
-    //     //need scoped symboling -> and in the topmost thing, we define scopes, where each scope
-    //     //stores a symbol list  -> so instead what we can do is have a (dec id, ident id) pair-> resulting in a
-    //     //symbol id
-    //     todo!()
-    // }
 }
 
 // struct Foo {

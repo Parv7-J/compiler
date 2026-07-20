@@ -134,7 +134,7 @@ pub struct Field {
     pub ty: IdentTy,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SpannedIdent(pub Span);
 
 #[derive(Debug, Clone)]
@@ -146,7 +146,7 @@ pub struct Get {
     pub module: LiteralString,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum IdentTy {
     Type(SpannedTy),
     Ident(SpannedIdent),
@@ -154,17 +154,23 @@ pub enum IdentTy {
     Ptr(SpannedPtr),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SpannedPtr {
     pub ptr: Span,
     pub ty: Box<IdentTy>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SpannedArr {
-    pub ty: Ty,
+    pub arr_ty: ArrType,
     pub inner_ty: Box<IdentTy>,
     pub span: Span,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ArrType {
+    Arr,
+    HeapArr,
 }
 
 #[derive(Debug, Clone)]
