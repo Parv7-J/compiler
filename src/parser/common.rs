@@ -43,26 +43,28 @@ impl Parser<'_> {
         Ok(Block(block))
     }
 
-    pub fn parse_range(&mut self) -> miette::Result<(Expr, Expr, Option<Expr>)> {
+    pub fn parse_range(&mut self) -> miette::Result<Range> {
         let start = self.parse_expr()?;
         self.expect(TokenKind::Punctuation(Punctuation::Comma))?;
         let end = self.parse_expr()?;
-        match self.peek() {
+        let step = match self.peek() {
             Some(TokenKind::Punctuation(Punctuation::Comma)) => {
                 self.next();
-                let jump = self.parse_expr()?;
-                Ok((start, end, Some(jump)))
+                Some(self.parse_expr()?)
             }
-            _ => Ok((start, end, None)),
-        }
+            _ => None,
+        };
+        Ok(Range { start, end, step })
     }
 
     pub fn parse_variant(&mut self) -> miette::Result<Variant> {
         let ident = self.parse_ident()?;
-        if self.peek() != Some(TokenKind::Delimiter(Delimiter::ParenOpen)) {
+        if self
+            .expect(TokenKind::Delimiter(Delimiter::ParenOpen))
+            .is_err()
+        {
             return Ok(Variant::SpannedIdent(ident));
         }
-        self.next();
         let ty = self.parse_identty()?;
         self.expect(TokenKind::Delimiter(Delimiter::ParenClose))?;
         Ok(Variant::Field(Field { ident, ty }))
@@ -78,14 +80,13 @@ impl Parser<'_> {
 
     pub fn parse_identty(&mut self) -> miette::Result<IdentTy> {
         match self.peek() {
-            Some(TokenKind::Keyword(Keyword::Type(_))) => self.parse_anyty(),
-            Some(TokenKind::Ident) => {
-                let token = self.expect(TokenKind::Ident)?;
-                Ok(IdentTy::Ident(SpannedIdent(token.span)))
-            }
+            Some(TokenKind::Keyword(Keyword::Type(_))) => self.parse_builtintype(),
+            Some(TokenKind::Ident) => Ok(IdentTy::Ident(SpannedIdent(
+                self.expect(TokenKind::Ident)?.span,
+            ))),
             Some(TokenKind::Operator(Operator::Star)) => Ok(IdentTy::Ptr(self.parse_ptr()?)),
             Some(_) => {
-                let token = self.next().unwrap();
+                let token = self.token.or_else(|| self.lexer.clone().next()).unwrap();
                 Err(ParseError::Unexpected {
                     expected: Expected::Type,
                     found: Found::Kind(token.kind),
@@ -140,7 +141,8 @@ impl Parser<'_> {
         let token = self.expect(TokenKind::Ident)?;
         Ok(SpannedIdent(token.span))
     }
-    pub fn parse_anyty(&mut self) -> miette::Result<IdentTy> {
+
+    fn parse_builtintype(&mut self) -> miette::Result<IdentTy> {
         let TokenKind::Keyword(Keyword::Type(ty)) = self.peek().unwrap() else {
             unreachable!()
         };

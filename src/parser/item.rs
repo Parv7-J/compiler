@@ -1,5 +1,3 @@
-use miette::Context;
-
 use super::Parser;
 use super::ast::*;
 use crate::lexer::token::*;
@@ -25,22 +23,17 @@ impl Parser<'_> {
         self.expect(TokenKind::Keyword(Keyword::Require))?;
         let api = self.parse_ident()?;
         self.expect(TokenKind::Keyword(Keyword::For))?;
-        let ident = self.parse_ident()?;
-        self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;
-        let procs = self.parse_procs()?;
-        self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
         Ok(Require {
-            ident,
+            ident: self.parse_ident()?,
             api,
-            procedures: procs,
+            procedures: self.parse_procs()?,
         })
     }
 
     pub fn parse_api(&mut self) -> miette::Result<Api> {
         self.expect(TokenKind::Keyword(Keyword::Api))?;
         let ident = self.parse_ident()?;
-        let super_api = if matches!(self.peek(), Some(TokenKind::Keyword(Keyword::Also))) {
-            let token = self.next().unwrap();
+        let super_api = if let Ok(token) = self.expect(TokenKind::Keyword(Keyword::Also)) {
             let list = self.parse_identlist()?;
             if list.is_empty() {
                 return Err(ParseError::EmptySubApis {
@@ -50,50 +43,21 @@ impl Parser<'_> {
             }
             list
         } else {
-            vec![]
+            Vec::new()
         };
-        self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;
-        let procedures = self.parse_procs()?;
-        self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
         Ok(Api {
             ident,
             super_api,
-            procedures,
+            procedures: self.parse_procs()?,
         })
     }
 
     pub fn parse_methods(&mut self) -> miette::Result<Methods> {
-        let context = "Parsing Methods";
-        self.expect(TokenKind::Keyword(Keyword::Methods))
-            .context(context)?;
-        let ident = self.parse_ident().context(context)?;
-        let curly_open = self
-            .expect(TokenKind::Delimiter(Delimiter::CurlyOpen))
-            .context(context)?;
-        let procs = self.parse_procs()?;
-        let curly_close = self
-            .expect(TokenKind::Delimiter(Delimiter::CurlyClose))
-            .context(context)?;
-        if procs.is_empty() {
-            let block_span = from_spans(curly_open.span, curly_close.span);
-            return Err(ParseError::EmptyMethodsBlock { span: block_span }.into());
-        }
+        self.expect(TokenKind::Keyword(Keyword::Methods))?;
         Ok(Methods {
-            ident,
-            procedures: procs,
+            ident: self.parse_ident()?,
+            procedures: self.parse_procs()?,
         })
-    }
-
-    pub fn parse_procs(&mut self) -> miette::Result<Vec<Procedure>> {
-        let mut procs = Vec::new();
-        loop {
-            if matches!(self.peek(), Some(TokenKind::Keyword(Keyword::Proc))) {
-                procs.push(self.parse_proc()?);
-                continue;
-            }
-            break;
-        }
-        Ok(procs)
     }
 
     pub fn parse_proc(&mut self) -> miette::Result<Procedure> {
@@ -103,19 +67,20 @@ impl Parser<'_> {
         let args = self.parse_fields()?;
         self.expect(TokenKind::Delimiter(Delimiter::SquareClose))?;
 
-        let mut return_value = None;
-        if self.peek() == Some(TokenKind::Punctuation(Punctuation::Colon)) {
-            self.next();
-            return_value = Some(self.parse_identty()?);
-        }
-
-        let body = self.parse_block()?;
+        let return_value = if self
+            .expect(TokenKind::Punctuation(Punctuation::Colon))
+            .is_ok()
+        {
+            Some(self.parse_identty()?)
+        } else {
+            None
+        };
 
         Ok(Procedure {
             ident,
             args,
             return_value,
-            body,
+            body: self.parse_block()?,
         })
     }
 
@@ -125,9 +90,6 @@ impl Parser<'_> {
         self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;
         let fields = self.parse_fields()?;
         self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
-        // struct Foo
-        // let a = self.parse_packing();
-        // println!("{a:?}");
         Ok(Packing { ident, fields })
     }
 
@@ -140,54 +102,65 @@ impl Parser<'_> {
         Ok(Aor { ident, variants })
     }
 
-    pub fn parse_identlist(&mut self) -> miette::Result<Vec<SpannedIdent>> {
+    fn parse_procs(&mut self) -> miette::Result<Vec<Procedure>> {
+        self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;
+        let mut procs = Vec::new();
+        loop {
+            if matches!(self.peek(), Some(TokenKind::Keyword(Keyword::Proc))) {
+                procs.push(self.parse_proc()?);
+                continue;
+            }
+            break;
+        }
+        self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
+        Ok(procs)
+    }
+
+    fn parse_identlist(&mut self) -> miette::Result<Vec<SpannedIdent>> {
+        if !matches!(self.peek(), Some(TokenKind::Ident)) {
+            return Ok(vec![]);
+        }
         let mut idents = Vec::new();
         loop {
-            if self.peek() != Some(TokenKind::Ident) {
+            idents.push(self.parse_ident()?);
+            if self
+                .expect(TokenKind::Punctuation(Punctuation::Comma))
+                .is_err()
+            {
                 break;
             }
-            let ident = self.parse_ident()?;
-            idents.push(ident);
-            if self.peek() != Some(TokenKind::Punctuation(Punctuation::Comma)) {
-                break;
-            }
-            self.next();
         }
         Ok(idents)
     }
 
-    pub fn parse_fields(&mut self) -> miette::Result<Vec<Field>> {
+    fn parse_fields(&mut self) -> miette::Result<Vec<Field>> {
         if !matches!(self.peek(), Some(TokenKind::Ident)) {
             return Ok(vec![]);
         }
         let mut fields = Vec::new();
         loop {
-            let field = self.parse_field()?;
-            fields.push(field);
-            if !matches!(
-                self.peek(),
-                Some(TokenKind::Punctuation(Punctuation::Comma))
-            ) {
+            fields.push(self.parse_field()?);
+            if self
+                .expect(TokenKind::Punctuation(Punctuation::Comma))
+                .is_err()
+            {
                 break;
             }
-            self.next();
         }
         Ok(fields)
     }
 
-    pub fn parse_variants(&mut self) -> miette::Result<Vec<Variant>> {
+    fn parse_variants(&mut self) -> miette::Result<Vec<Variant>> {
         let mut variants = Vec::new();
-
         loop {
             let variant = self.parse_variant()?;
             variants.push(variant);
-            if !matches!(
-                self.peek(),
-                Some(TokenKind::Punctuation(Punctuation::Comma))
-            ) {
+            if self
+                .expect(TokenKind::Punctuation(Punctuation::Comma))
+                .is_err()
+            {
                 break;
             }
-            self.next();
         }
 
         Ok(variants)

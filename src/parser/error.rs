@@ -7,12 +7,6 @@ use crate::lexer::token::TokenKind;
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum ParseError {
-    #[error("Empty methods block")]
-    #[diagnostic(help("You must define at least one 'proc' inside a methods block."))]
-    EmptyMethodsBlock {
-        #[label("expected procedures between these braces")]
-        span: SourceSpan,
-    },
     #[error("Empty import list")]
     #[diagnostic(help("You must atleast import one thing, or remove the whole get statement"))]
     EmptyImportsList {

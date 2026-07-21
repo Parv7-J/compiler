@@ -81,7 +81,7 @@ pub enum Stmt {
     Seed {
         return_value: Expr,
     },
-    Conditional {
+    If {
         ifs: Conditional,
         elseifs: Vec<Conditional>,
         elses: Option<Block>,
@@ -89,8 +89,8 @@ pub enum Stmt {
     For {
         ty: SpannedTy,
         ident: SpannedIdent,
-        range: Option<(Expr, Expr, Option<Expr>)>,
-        inn: Option<SpannedIdent>,
+        range: Option<Range>,
+        collection: Option<SpannedIdent>,
         block: Block,
     },
     While {
@@ -129,6 +129,13 @@ pub struct Aor {
 pub enum Variant {
     Field(Field),
     SpannedIdent(SpannedIdent),
+}
+
+#[derive(Debug, Clone)]
+pub struct Range {
+    pub start: Expr,
+    pub end: Expr,
+    pub step: Option<Expr>,
 }
 
 #[derive(Debug, Clone)]
