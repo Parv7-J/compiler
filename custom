@@ -1,5 +1,4 @@
-proc foo[] {
-    {
-
-    }
+packing Foo {
+    hello(i32),
+    bar(Bar)
 }

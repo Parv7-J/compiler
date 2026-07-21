@@ -81,20 +81,38 @@ impl<'a> IdentStore<'a> {
 
 #[derive(Debug, Clone)]
 pub struct DeclarationStore {
+    pub scopes: Scopes,
     pub ids: HashMap<DeclarationKey, DeclarationId>,
     pub db: Vec<DeclarationEntry>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DeclarationKey {
-    scope_id: ScopeId,
+    parent_scope_id: ScopeId,
     ident_id: IdentId,
+}
+
+#[derive(Debug, Clone)]
+pub struct Scopes {
+    parents: Vec<usize>,
+}
+
+impl Scopes {
+    pub fn new() -> Self {
+        Self { parents: vec![0] }
+    }
+
+    pub fn add_scope(&mut self, parent: ScopeId) -> ScopeId {
+        let len = self.parents.len();
+        self.parents.push(parent.0);
+        ScopeId(len)
+    }
 }
 
 impl DeclarationKey {
     pub fn new(scope: ScopeId, ident_id: IdentId) -> Self {
         Self {
-            scope_id: scope,
+            parent_scope_id: scope,
             ident_id,
         }
     }
@@ -117,6 +135,7 @@ impl DeclarationEntry {
 
 #[derive(Debug, Clone)]
 pub struct DeclarationInfo {
+    pub scope: ScopeId,
     pub span: Span,
     pub ty: DeclarationType,
 }
@@ -159,6 +178,7 @@ pub enum IsTy {
 impl DeclarationStore {
     pub fn new() -> Self {
         Self {
+            scopes: Scopes::new(),
             ids: HashMap::new(),
             db: Vec::new(),
         }
@@ -167,18 +187,24 @@ impl DeclarationStore {
     ///inserts the IdentId inside the store, returning it or
     ///panics because we have two duplicate interns, and thus two duplicate named declarations, even though
     ///they may be of different type
-    pub fn insert(&mut self, key: DeclarationKey, span: Span, is_ty: IsTy) -> DeclarationId {
+    pub fn insert(
+        &mut self,
+        key: DeclarationKey,
+        parent_scope: ScopeId,
+        span: Span,
+        is_ty: IsTy,
+    ) -> DeclarationId {
         match self.ids.entry(key) {
             Entry::Occupied(occupied_entry) => {
-                let declaration_info = match is_ty {
-                    IsTy::Yes => DeclarationInfo {
-                        span,
-                        ty: DeclarationType::PendingType,
-                    },
-                    IsTy::No => DeclarationInfo {
-                        span,
-                        ty: DeclarationType::Pending,
-                    },
+                let new_scope = self.scopes.add_scope(parent_scope);
+                let ty = match is_ty {
+                    IsTy::Yes => DeclarationType::PendingType,
+                    IsTy::No => DeclarationType::Pending,
+                };
+                let declaration_info = DeclarationInfo {
+                    scope: new_scope,
+                    span,
+                    ty,
                 };
                 self.db[occupied_entry.get().0].info.push(declaration_info);
                 *occupied_entry.get()
@@ -186,15 +212,15 @@ impl DeclarationStore {
             Entry::Vacant(vacant_entry) => {
                 let idx = DeclarationId(self.db.len());
                 vacant_entry.insert(idx);
-                let declaration_info = match is_ty {
-                    IsTy::Yes => DeclarationInfo {
-                        span,
-                        ty: DeclarationType::PendingType,
-                    },
-                    IsTy::No => DeclarationInfo {
-                        span,
-                        ty: DeclarationType::Pending,
-                    },
+                let new_scope = self.scopes.add_scope(parent_scope);
+                let ty = match is_ty {
+                    IsTy::Yes => DeclarationType::PendingType,
+                    IsTy::No => DeclarationType::Pending,
+                };
+                let declaration_info = DeclarationInfo {
+                    scope: new_scope,
+                    span,
+                    ty,
                 };
                 self.db.push(DeclarationEntry::new(declaration_info));
                 idx
@@ -241,16 +267,14 @@ pub struct SymbolStore {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SymbolKey {
-    scope_id: ScopeId,
-    declaration_id: DeclarationId,
+    parent_scope_id: ScopeId,
     ident_id: IdentId,
 }
 
 impl SymbolKey {
-    pub fn new(scope: ScopeId, dec_id: DeclarationId, ident_id: IdentId) -> Self {
+    pub fn new(parent_scope_id: ScopeId, ident_id: IdentId) -> Self {
         Self {
-            scope_id: scope,
-            declaration_id: dec_id,
+            parent_scope_id,
             ident_id,
         }
     }
