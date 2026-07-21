@@ -2,3 +2,13 @@ packing Foo {
     hello(i32),
     bar(Bar)
 }
+
+aor Bar {
+    Hell,
+    Heaven
+}
+
+packing Bar {
+    why(i32),
+    Heaven(u32)
+}

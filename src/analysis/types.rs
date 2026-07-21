@@ -94,25 +94,31 @@ pub struct DeclarationKey {
 
 #[derive(Debug, Clone)]
 pub struct Scopes {
-    parents: Vec<usize>,
+    parents: Vec<ScopeId>,
 }
 
 impl Scopes {
     pub fn new() -> Self {
-        Self { parents: vec![0] }
+        Self {
+            parents: vec![ScopeId(0)],
+        }
     }
 
     pub fn add_scope(&mut self, parent: ScopeId) -> ScopeId {
         let len = self.parents.len();
-        self.parents.push(parent.0);
+        self.parents.push(parent);
         ScopeId(len)
+    }
+
+    pub fn parent_scope(&self, scope: ScopeId) -> ScopeId {
+        self.parents[scope.0]
     }
 }
 
 impl DeclarationKey {
-    pub fn new(scope: ScopeId, ident_id: IdentId) -> Self {
+    pub fn new(parent_scope_id: ScopeId, ident_id: IdentId) -> Self {
         Self {
-            parent_scope_id: scope,
+            parent_scope_id,
             ident_id,
         }
     }

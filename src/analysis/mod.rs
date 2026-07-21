@@ -95,7 +95,7 @@ impl<'a> AstAnalyzer<'a> {
 
             analyzer
                 .declarations
-                .insert(item_key, ScopeId(0), item_span, is_ty);
+                .insert(item_key, analyzer.scope, item_span, is_ty);
         }
 
         for item in items {
@@ -125,11 +125,13 @@ pub struct Analyzer<'a> {
 impl Analyzer<'_> {
     fn register_procedure(&mut self, procedure: &Procedure) {
         let procedure_did = self.did(procedure.ident.0);
-        let scope = self.declarations.dinfo(procedure_did).scope;
+        let procedure_scope = self.declarations.dinfo(procedure_did).scope;
+        self.enter_scope(procedure_scope);
+
         let mut arguments = HashMap::new();
 
         for arg in &procedure.args {
-            if let Some((iid, sid)) = self.register_field(arg, scope) {
+            if let Some((iid, sid)) = self.register_field(arg) {
                 arguments.insert(iid, sid);
             }
         }
@@ -144,93 +146,33 @@ impl Analyzer<'_> {
             arguments,
             return_ty,
         });
+        self.exit_scope();
     }
-
-    // fn register_methods(&mut self, methods: &Methods) {
-    //     let procedure_did = self.did(methods.ident.0);
-    //     let mut arguments = HashMap::new();
-    //
-    //     for arg in &procedure.args {
-    //         if let Some((iid, sid)) = self.register_field(arg, procedure_did) {
-    //             arguments.insert(iid, sid);
-    //         }
-    //     }
-    //
-    //     let return_ty = procedure
-    //         .return_value
-    //         .as_ref()
-    //         .map(|ty| self.symbol_type(ty));
-    //
-    //     let procedure_info = self.declarations.get_dinfo(procedure_did);
-    //     procedure_info.ty = DeclarationType::Resolved(Resolved::Procedure {
-    //         arguments,
-    //         return_ty,
-    //     });
-    // }
-
-    // fn register_api(&mut self, procedure: &Procedure) {
-    //     let procedure_did = self.did(procedure.ident.0);
-    //     let mut arguments = HashMap::new();
-    //
-    //     for arg in &procedure.args {
-    //         if let Some((iid, sid)) = self.register_field(arg, procedure_did) {
-    //             arguments.insert(iid, sid);
-    //         }
-    //     }
-    //
-    //     let return_ty = procedure
-    //         .return_value
-    //         .as_ref()
-    //         .map(|ty| self.symbol_type(ty));
-    //
-    //     let procedure_info = self.declarations.get_dinfo(procedure_did);
-    //     procedure_info.ty = DeclarationType::Resolved(Resolved::Procedure {
-    //         arguments,
-    //         return_ty,
-    //     });
-    // }
-    //
-    // fn register_require(&mut self, procedure: &Procedure) {
-    //     let procedure_did = self.did(procedure.ident.0);
-    //     let mut arguments = HashMap::new();
-    //
-    //     for arg in &procedure.args {
-    //         if let Some((iid, sid)) = self.register_field(arg, procedure_did) {
-    //             arguments.insert(iid, sid);
-    //         }
-    //     }
-    //
-    //     let return_ty = procedure
-    //         .return_value
-    //         .as_ref()
-    //         .map(|ty| self.symbol_type(ty));
-    //
-    //     let procedure_info = self.declarations.get_dinfo(procedure_did);
-    //     procedure_info.ty = DeclarationType::Resolved(Resolved::Procedure {
-    //         arguments,
-    //         return_ty,
-    //     });
-    // }
 
     fn register_packing(&mut self, packing: &Packing) {
         //TODO: dont register the packing as it wont even be used?, and type checking is done normally
         //like that only
         let packing_did = self.did(packing.ident.0);
-        let scope = self.declarations.dinfo(packing_did).scope;
+        let packing_scope = self.declarations.dinfo(packing_did).scope;
+        self.enter_scope(packing_scope);
+
         let mut symbols = HashMap::new();
 
         for field in &packing.fields {
-            if let Some((iid, sid)) = self.register_field(field, scope) {
+            if let Some((iid, sid)) = self.register_field(field) {
                 symbols.insert(iid, sid);
             }
         }
 
         self.resolve(packing_did, ResolvedType::Packing(symbols));
+        self.exit_scope();
     }
 
     fn register_aor(&mut self, aor: &Aor) {
         let aor_did = self.did(aor.ident.0);
-        let scope = self.declarations.dinfo(aor_did).scope;
+        let aor_scope = self.declarations.dinfo(aor_did).scope;
+        self.enter_scope(aor_scope);
+
         let mut symbols = HashMap::new();
 
         for variant in &aor.variants {
@@ -238,14 +180,14 @@ impl Analyzer<'_> {
                 Variant::Field(field) => {
                     //TODO: make register_variant which pushes a duplicate variant not duplicate
                     //field error
-                    if let Some((iid, sid)) = self.register_field(field, scope) {
+                    if let Some((iid, sid)) = self.register_field(field) {
                         symbols.insert(iid, sid);
                     }
                 }
                 Variant::SpannedIdent(spanned_ident) => {
                     let variant_span = spanned_ident.0;
                     let variant_iid = self.idents.insert(variant_span);
-                    let variant_key = SymbolKey::new(scope, variant_iid);
+                    let variant_key = SymbolKey::new(self.scope, variant_iid);
                     if let Some(variant_sid) = self.symbols.get_sid(variant_key) {
                         let already_declared_span =
                             self.symbols.first_declaration(variant_sid).span.into();
@@ -267,15 +209,16 @@ impl Analyzer<'_> {
         }
 
         self.resolve(aor_did, ResolvedType::Aor(symbols));
+        self.exit_scope();
     }
 
     ///doesnt check if the field is already initialized, so the caller must make sure thats
     ///not the case
     ///NOTE: calls get_sinfo once, thus moving the 'at' pointer for field declaration by 1
-    fn register_field(&mut self, field: &Field, parent: ScopeId) -> Option<(IdentId, SymbolId)> {
+    fn register_field(&mut self, field: &Field) -> Option<(IdentId, SymbolId)> {
         let field_span = field.ident.0;
         let field_iid = self.idents.insert(field_span);
-        let field_key = SymbolKey::new(parent, field_iid);
+        let field_key = SymbolKey::new(self.scope, field_iid);
 
         if let Some(field_sid) = self.symbols.get_sid(field_key) {
             //here we need to actually store dup fields, as they may belong to dup items
@@ -316,9 +259,7 @@ impl Analyzer<'_> {
                     }
                 };
 
-                //This is going to look up all the scopes
-                let adt_key = DeclarationKey::new(self.scope, adt_iid);
-                let adt_did = match self.declarations.get_did(adt_key) {
+                let adt_did = match self.find_declaration(adt_iid) {
                     Some(did) => did,
                     None => {
                         self.errors.push(
@@ -384,5 +325,35 @@ impl Analyzer<'_> {
     fn resolve(&mut self, did: DeclarationId, resolved_type: ResolvedType) {
         let info = self.declarations.get_dinfo(did);
         info.ty = DeclarationType::ResolvedType(resolved_type);
+    }
+
+    ///enters the given scope
+    fn enter_scope(&mut self, scope: ScopeId) {
+        self.scope = scope;
+    }
+
+    ///exits the current scope, and returns to the parent scope
+    fn exit_scope(&mut self) {
+        self.scope = self.declarations.scopes.parent_scope(self.scope);
+    }
+
+    ///starts from the current scope to the outermost scope, looking for a declaration matching the
+    ///ident
+    fn find_declaration(&self, iid: IdentId) -> Option<DeclarationId> {
+        let mut scope = self.scope;
+        loop {
+            let key = DeclarationKey::new(scope, iid);
+            match self.declarations.get_did(key) {
+                Some(did) => return Some(did),
+                None => {
+                    let parent_scope = self.declarations.scopes.parent_scope(scope);
+                    if scope == parent_scope {
+                        break;
+                    }
+                    scope = parent_scope;
+                }
+            };
+        }
+        None
     }
 }
