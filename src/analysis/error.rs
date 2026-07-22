@@ -45,6 +45,12 @@ pub enum AnalysisError {
         #[label("item, not a type")]
         item_span: SourceSpan,
     },
+    #[error("Init method not defined")]
+    #[diagnostic(help("define an init method to initialize the type"))]
+    InitMethodUndefined {
+        #[label("in this methods block")]
+        span: SourceSpan,
+    },
 }
 
 #[derive(Debug)]

@@ -10,5 +10,6 @@ aor Bar {
 
 packing Bar {
     why(i32),
-    Heaven(u32)
+    Heaven(u32),
+    why(string)
 }
