@@ -1,10 +1,3 @@
-//TODO: right now duplicate declarations are cooking us, as the analyzer is thinking there is only
-//one declaration while doing symbol resolution
-//i.e it doesnt understand the diff between a same named field in two diff structs of the same name,
-//and a same named field in the same struct -> as symbols are being ided by sid, iid, did
-//maybe the fix is to have the struct store a mapping of iid -> vec<sid>
-//not a big bug but needs to be fixed
-
 use crate::parser::ast::*;
 use std::sync::Arc;
 
@@ -20,15 +13,6 @@ pub struct AstAnalyzer<'a> {
     ast: Ast<'a>,
     analyzer: Analyzer<'a>,
 }
-
-//packing Foo {a(i32), b(Bar)} -> no need for the span of 'packing', we need the span of 'Foo', we
-//need the span of 'a' and 'b', and we also need the span of 'i32', 'Bar' -> empty () will be caught
-//at parsetime, and any errors like undelimited ), or ident missing etc. etc. will be also caught at
-//parse time. so we now dont need spans of anything else as they are not necessary. But do we need
-//spans of keywords like i32 and Foo??? at parse time we remove the spans of things like delims,
-//puncts, etc. but we do track the spans of ty using spannedty and of idents using spannedident, so
-//lets keep the spans intact
-//packing Bar {brr(u32)}
 
 impl<'a> AstAnalyzer<'a> {
     pub fn new(ast: Ast<'a>) -> Self {
@@ -72,14 +56,12 @@ impl<'a> AstAnalyzer<'a> {
         let items = &self.ast.items;
 
         for item in items {
+            if matches!(item, Item::Methods(_) | Item::Require(_)) {
+                continue;
+            }
+
             let item_span = item.span();
             let item_iid = analyzer.idents.insert(item_span);
-
-            let is_ty = if matches!(item, Item::Packing(_) | Item::Aor(_)) {
-                IsTy::Yes
-            } else {
-                IsTy::No
-            };
 
             let item_key = DeclarationKey::new(analyzer.scope, item_iid);
 
@@ -94,9 +76,7 @@ impl<'a> AstAnalyzer<'a> {
                 );
             }
 
-            analyzer
-                .declarations
-                .insert(item_key, analyzer.scope, item_span, is_ty);
+            analyzer.declarations.insert(item_key, item_span, item);
         }
 
         for item in items {
@@ -110,11 +90,14 @@ impl<'a> AstAnalyzer<'a> {
                 Item::Procedure(procedure) => {
                     analyzer.register_procedure(procedure);
                 }
-                Item::Methods(methods) => {
+                Item::Methods(_methods) => {
                     todo!()
                     // analyzer.register_methods(methods);
                 }
-                Item::Api(_api) => todo!(),
+                Item::Api(_api) => {
+                    todo!()
+                    // analyzer.register_api(api);
+                }
                 Item::Require(_require) => todo!(),
                 Item::Get(_get) => todo!(),
                 Item::Block(_) => unreachable!(),

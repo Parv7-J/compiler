@@ -1,9 +1,5 @@
-use std::fmt::Display;
-
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
-
-use crate::lexer::token::TokenKind;
 
 #[derive(Error, Diagnostic, Debug, Clone)]
 pub enum AnalysisError {
@@ -37,6 +33,12 @@ pub enum AnalysisError {
         #[label("type definition not found ")]
         span: SourceSpan,
     },
+    #[error("Undefined Api")]
+    #[diagnostic(help("define the api"))]
+    UndefinedApi {
+        #[label("api definition not found ")]
+        span: SourceSpan,
+    },
     #[error("Not a Type")]
     #[diagnostic(help("use a different name for the type"))]
     NotAType {
@@ -45,42 +47,32 @@ pub enum AnalysisError {
         #[label("item, not a type")]
         item_span: SourceSpan,
     },
+    #[error("Not An Api")]
+    #[diagnostic(help("use a different name for the api"))]
+    NotAnApi {
+        #[label("referenced here")]
+        span: SourceSpan,
+        #[label("item, not an api")]
+        item_span: SourceSpan,
+    },
+    #[error("Defining methods for undefined type")]
+    #[diagnostic(help("define the type before attaching methods on it"))]
+    MethodsForUndefinedType {
+        #[label("type not defined")]
+        span: SourceSpan,
+    },
     #[error("Init method not defined")]
     #[diagnostic(help("define an init method to initialize the type"))]
     InitMethodUndefined {
         #[label("in this methods block")]
         span: SourceSpan,
     },
-}
-
-#[derive(Debug)]
-pub enum Expected {
-    Kind(TokenKind),
-    Type,
-    Expr,
-}
-
-#[derive(Debug)]
-pub enum Found {
-    Kind(TokenKind),
-    Eof,
-}
-
-impl Display for Expected {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Expected::Kind(token_kind) => write!(f, "{token_kind}"),
-            Expected::Type => write!(f, "type"),
-            Expected::Expr => write!(f, "expression"),
-        }
-    }
-}
-
-impl Display for Found {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Found::Kind(token_kind) => write!(f, "{token_kind}"),
-            Found::Eof => write!(f, "end of file"),
-        }
-    }
+    #[error("Defining methods for item which is not a type")]
+    #[diagnostic(help("define the type before attaching methods to it"))]
+    MethodsForNotAType {
+        #[label("not a type")]
+        span: SourceSpan,
+        #[label("item, not a type")]
+        item_span: SourceSpan,
+    },
 }

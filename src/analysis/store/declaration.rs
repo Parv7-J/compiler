@@ -1,6 +1,7 @@
 use crate::analysis::SymbolId;
 use crate::analysis::SymbolType;
 use crate::lexer::token::Span;
+use crate::parser::ast::Item;
 
 use super::{DeclarationId, IdentId, ScopeId};
 use std::collections::HashMap;
@@ -57,6 +58,29 @@ pub struct DeclarationEntry {
     pub info: Vec<DeclarationInfo>,
 }
 
+#[derive(Debug, Clone)]
+pub struct TypeEntry {
+    pub ty: Vec<DeclarationInfo>,
+    pub methods: Vec<DeclarationInfo>,
+    pub require: Vec<DeclarationInfo>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Ent {
+    pub at: usize,
+    pub info: Vec<DeclarationInfo>,
+}
+
+pub struct PackingDeclaration {
+    pub at: usize,
+    pub types: Vec<HashMap<IdentId, SymbolId>>,
+}
+
+pub struct AorDeclarations {
+    pub at: usize,
+    pub declarations: Vec<HashMap<IdentId, SymbolId>>,
+}
+
 impl DeclarationEntry {
     pub fn new(info: DeclarationInfo) -> Self {
         Self {
@@ -75,37 +99,64 @@ pub struct DeclarationInfo {
 
 #[derive(Debug, Clone)]
 pub enum DeclarationType {
-    Pending,
+    Pending(Pending),
     Resolved(Resolved),
-    PendingType,
-    ResolvedType(ResolvedType),
+}
+
+#[derive(Debug, Clone)]
+pub enum Pending {
+    Packing,
+    Aor,
+    Procedure,
+    Api,
+    // Get,
+    // Block,
+}
+
+#[derive(Debug, Clone)]
+pub struct RequireDeclaration {
+    //require Clone for Foo; -> 1st el in vec
+    //require Clone for Foo; -> 2nd el in vec
+    //require Debug for Foo;
+
+    //key is Clone, Debugs 'did'
+    //value is a vec of implementations
+    pub implemented: HashMap<DeclarationId, Vec<HashMap<IdentId, DeclarationId>>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MethodsDeclaration {
+    //methods Hello {fn foo; fn bar;} -> 1st el in methods vec
+    //methods Hello {fn baz; fn quox;} -> 2nd el in methods vec
+    //each el is a mapping from fn name to 'did' => for quick conversion
+    pub methods: Vec<HashMap<IdentId, DeclarationId>>,
+}
+struct Packing {
+    fields: Option<HashMap<IdentId, SymbolId>>,
+    methods: Option<Vec<HashMap<IdentId, DeclarationId>>>,
+    requires: Option<HashMap<DeclarationId, Vec<HashMap<IdentId, DeclarationId>>>>,
+}
+
+struct Aor {
+    variants: Option<HashMap<IdentId, SymbolId>>,
+    methods: Option<Vec<HashMap<IdentId, DeclarationId>>>,
+    requires: Option<HashMap<DeclarationId, Vec<HashMap<IdentId, DeclarationId>>>>,
+}
+
+struct Api {
+    super_apis: Vec<DeclarationId>,
+    procedures: HashMap<IdentId, DeclarationId>,
 }
 
 #[derive(Debug, Clone)]
 pub enum Resolved {
+    Packing(HashMap<IdentId, SymbolId>),
+    Aor(HashMap<IdentId, SymbolId>),
     Procedure {
         arguments: HashMap<IdentId, SymbolId>,
         return_ty: Option<SymbolType>,
     },
-    Methods,
-    Api,
-    Require,
-    Get,
-}
-
-//foo.a
-//get the type for foo -> Vec<SymbolId>,
-//get the type for a -> i think we need an ident id to symbolid map here
-
-#[derive(Debug, Clone)]
-pub enum ResolvedType {
-    Packing(HashMap<IdentId, SymbolId>),
-    Aor(HashMap<IdentId, SymbolId>),
-}
-
-pub enum IsTy {
-    Yes,
-    No,
+    Api {},
 }
 
 impl DeclarationStore {
@@ -120,20 +171,18 @@ impl DeclarationStore {
     ///inserts the IdentId inside the store, returning it or
     ///panics because we have two duplicate interns, and thus two duplicate named declarations, even though
     ///they may be of different type
-    pub fn insert(
-        &mut self,
-        key: DeclarationKey,
-        parent_scope: ScopeId,
-        span: Span,
-        is_ty: IsTy,
-    ) -> DeclarationId {
+    pub fn insert(&mut self, key: DeclarationKey, span: Span, item: &Item) -> DeclarationId {
+        //we should leave the collection of require and methods, and treat them in the next stage
+        let ty = match item {
+            Item::Packing(_) => DeclarationType::Pending(Pending::Packing),
+            Item::Aor(_) => DeclarationType::Pending(Pending::Aor),
+            Item::Procedure(_) => DeclarationType::Pending(Pending::Procedure),
+            Item::Api(_) => DeclarationType::Pending(Pending::Api),
+            _ => unimplemented!(),
+        };
         match self.ids.entry(key) {
             Entry::Occupied(occupied_entry) => {
-                let new_scope = self.scopes.add_scope(parent_scope);
-                let ty = match is_ty {
-                    IsTy::Yes => DeclarationType::PendingType,
-                    IsTy::No => DeclarationType::Pending,
-                };
+                let new_scope = self.scopes.add_scope(key.parent_scope_id);
                 let declaration_info = DeclarationInfo {
                     scope: new_scope,
                     span,
@@ -145,11 +194,7 @@ impl DeclarationStore {
             Entry::Vacant(vacant_entry) => {
                 let idx = DeclarationId(self.db.len());
                 vacant_entry.insert(idx);
-                let new_scope = self.scopes.add_scope(parent_scope);
-                let ty = match is_ty {
-                    IsTy::Yes => DeclarationType::PendingType,
-                    IsTy::No => DeclarationType::Pending,
-                };
+                let new_scope = self.scopes.add_scope(key.parent_scope_id);
                 let declaration_info = DeclarationInfo {
                     scope: new_scope,
                     span,
@@ -165,6 +210,12 @@ impl DeclarationStore {
     ///panics if declaration_id is not in the store
     pub fn first_declaration(&self, id: DeclarationId) -> &DeclarationInfo {
         &self.db[id.0].info[0]
+    }
+
+    ///should always be called when it is ensured that the id corresponds to an entry
+    ///panics if declaration_id is not in the store
+    pub fn first_declaration_mut(&mut self, id: DeclarationId) -> &mut DeclarationInfo {
+        &mut self.db[id.0].info[0]
     }
 
     ///gets the DeclarationId from DeclarationKey, or else None

@@ -14,66 +14,98 @@ pub struct Analyzer<'a> {
 }
 
 impl Analyzer<'_> {
-    // pub fn register_methods(&mut self, methods: &Methods) {
-    //     let methods_span = methods.ident.0;
-    //     let methods_did = self.did(methods.ident.0);
-    //     let methods_scope = self.declarations.dinfo(methods_did).scope;
-    //     self.enter_scope(methods_scope);
-    //
-    //     let mut procedures = HashMap::new();
-    //     let mut has_init = false;
-    //
-    //     for method in &methods.procedures {
-    //         let (iid, did) = self.register_method(method);
-    //         if self.idents.get(iid).unwrap() == "init" {
-    //             has_init = true;
-    //         }
-    //         procedures.insert(iid, did);
-    //     }
-    //
-    //     if !has_init {
-    //         self.errors.push(
-    //             AnalysisError::InitMethodUndefined {
-    //                 span: methods_span.into(),
-    //             }
-    //             .into(),
-    //         );
-    //     }
-    //
-    //     let methods_info = self.declarations.get_dinfo(methods_did);
-    //     methods_info.ty = DeclarationType::Resolved(Resolved::Methods {
-    //         methods: procedures,
-    //     });
-    //     self.exit_scope();
-    // }
+    pub fn register_methods(&mut self, methods: &Methods) {
+        let type_span = methods.ident.0;
+        let type_iid = self.idents.insert(type_span);
+        let type_did = match self.find_declaration(type_iid) {
+            Some(did) => did,
+            None => {
+                self.errors.push(
+                    AnalysisError::MethodsForUndefinedType {
+                        span: type_span.into(),
+                    }
+                    .into(),
+                );
+                return;
+            }
+        };
+        let type_info = self.declarations.first_declaration_mut(type_did);
+        if !matches!(
+            type_info.ty,
+            DeclarationType::Pending(Pending::Packing | Pending::Aor)
+                | DeclarationType::Resolved(Resolved::Packing(_) | Resolved::Aor(_))
+        ) {
+            self.errors.push(
+                AnalysisError::MethodsForNotAType {
+                    span: type_span.into(),
+                    item_span: type_info.span.into(),
+                }
+                .into(),
+            );
+            return;
+        }
+
+        //we have made sure that the type is actually a type now
+
+        let methods_scope = self.declarations.scopes.add_scope(self.scope);
+        self.enter_scope(methods_scope);
+
+        let mut procedures = HashMap::new();
+        let mut has_init = false;
+
+        for method in &methods.procedures {
+            let (iid, did) = self.register_method(method);
+            if self.idents.get(iid).unwrap() == "init" {
+                has_init = true;
+            }
+            procedures.insert(iid, did);
+        }
+
+        if !has_init {
+            self.errors.push(
+                AnalysisError::InitMethodUndefined {
+                    span: methods_span.into(),
+                }
+                .into(),
+            );
+        }
+
+        let methods_info = self.declarations.get_dinfo(methods_did);
+        methods_info.ty = DeclarationType::Resolved(Resolved::Methods {
+            methods: procedures,
+        });
+        self.exit_scope();
+    }
     //
     // //TODO: give the 'this' symbol to it
-    // fn register_method(&mut self, method: &Procedure) -> (IdentId, DeclarationId) {
-    //     let method_span = method.ident.0;
-    //     let method_iid = self.idents.insert(method_span);
-    //     let method_key = DeclarationKey::new(self.scope, method_iid);
-    //     let method_did = self.declarations.insert(method_key, method_span, IsTy::No);
-    //     let method_scope = self.declarations.dinfo(method_did).scope;
-    //     self.enter_scope(method_scope);
-    //
-    //     let mut arguments = HashMap::new();
-    //
-    //     for arg in &method.args {
-    //         let (iid, sid) = self.register_field(arg);
-    //         arguments.insert(iid, sid);
-    //     }
-    //
-    //     let return_ty = method.return_value.as_ref().map(|ty| self.symbol_type(ty));
-    //
-    //     let method_info = self.declarations.get_dinfo(method_did);
-    //     method_info.ty = DeclarationType::Resolved(Resolved::Procedure {
-    //         arguments,
-    //         return_ty,
-    //     });
-    //     self.exit_scope();
-    //
-    //     (method_iid, method_did)
-    // }
+    fn register_method(&mut self, method: &Procedure) -> (IdentId, DeclarationId) {
+        let method_span = method.ident.0;
+        let method_iid = self.idents.insert(method_span);
+        let method_key = DeclarationKey::new(self.scope, method_iid);
+        let method_did =
+            self.declarations
+                .insert(method_key, method_span, &Item::Procedure(method.clone()));
+        let method_scope = self.declarations.dinfo(method_did).scope;
+        self.enter_scope(method_scope);
+
+        let mut arguments = HashMap::new();
+
+        for arg in &method.args {
+            let (iid, sid) = self.register_field(arg);
+            arguments.insert(iid, sid);
+        }
+
+        let return_ty = method.return_value.as_ref().map(|ty| self.symbol_type(ty));
+
+        let method_info = self.declarations.get_dinfo(method_did);
+        method_info.ty = DeclarationType::Resolved(Resolved::Procedure {
+            arguments,
+            return_ty,
+        });
+        self.exit_scope();
+
+        (method_iid, method_did)
+    }
 
     pub fn register_procedure(&mut self, procedure: &Procedure) -> (IdentId, DeclarationId) {
         let ident_span = procedure.ident.0;
@@ -104,6 +136,74 @@ impl Analyzer<'_> {
         (procedure_iid, procedure_did)
     }
 
+    pub fn register_api(&mut self, api: &Api) -> DeclarationId {
+        //1. this treats same named apis and types with the same 'did', which is correct as we dont
+        //   need to have duplicates, which this will catch at the time of collecting
+        //2. check if we have super api's defined -> self.declarations.first_declaration -> should
+        //   be pending api or resolved api
+        //3. collect the procedures in the api, and now yield
+        let api_did = self.did(api.ident.0);
+
+        let mut super_apis = Vec::new();
+
+        for api in &api.super_api {
+            let s_span = api.0;
+            let s_iid = self.idents.insert(s_span);
+
+            let s_did = match self.find_declaration(s_iid) {
+                Some(did) => did,
+                None => {
+                    self.errors.push(
+                        AnalysisError::UndefinedApi {
+                            span: s_span.into(),
+                        }
+                        .into(),
+                    );
+                    continue;
+                }
+            };
+
+            let s_info = self.declarations.first_declaration(s_did);
+            if !matches!(
+                s_info.ty,
+                DeclarationType::Pending(Pending::Api)
+                    | DeclarationType::Resolved(Resolved::Api { .. })
+            ) {
+                self.errors.push(
+                    AnalysisError::NotAnApi {
+                        span: s_span.into(),
+                        item_span: s_info.span.into(),
+                    }
+                    .into(),
+                );
+                continue;
+            }
+
+            super_apis.push(s_did);
+        }
+
+        let api_scope = self.declarations.dinfo(api_did).scope;
+        self.enter_scope(api_scope);
+
+        let mut symbols = HashMap::new();
+
+        for procedure in &api.procedures {
+            let (iid, did) = self.register_method(procedure);
+            symbols.insert(iid, did);
+        }
+
+        self.resolve(
+            api_did,
+            Resolved::Api {
+                super_apis,
+                procedures: symbols,
+            },
+        );
+        self.exit_scope();
+
+        api_did
+    }
+
     pub fn register_packing(&mut self, packing: &Packing) -> DeclarationId {
         let packing_did = self.did(packing.ident.0);
         let packing_scope = self.declarations.dinfo(packing_did).scope;
@@ -116,7 +216,7 @@ impl Analyzer<'_> {
             symbols.insert(iid, sid);
         }
 
-        self.resolve(packing_did, ResolvedType::Packing(symbols));
+        self.resolve(packing_did, Resolved::Packing(symbols));
         self.exit_scope();
 
         packing_did
@@ -134,7 +234,7 @@ impl Analyzer<'_> {
                 Variant::Field(field) => {
                     //TODO: make register_variant which pushes a duplicate variant not duplicate
                     //field error
-                    let (iid, sid) = self.register_field(field);
+                    let (iid, sid) = self.register_variant(field);
                     symbols.insert(iid, sid);
                 }
                 Variant::SpannedIdent(spanned_ident) => {
@@ -161,7 +261,7 @@ impl Analyzer<'_> {
             }
         }
 
-        self.resolve(aor_did, ResolvedType::Aor(symbols));
+        self.resolve(aor_did, Resolved::Aor(symbols));
         self.exit_scope();
 
         aor_did
@@ -196,6 +296,32 @@ impl Analyzer<'_> {
         (field_iid, field_sid)
     }
 
+    fn register_variant(&mut self, variant: &Field) -> (IdentId, SymbolId) {
+        let variant_span = variant.ident.0;
+        let variant_iid = self.idents.insert(variant_span);
+        let variant_key = SymbolKey::new(self.scope, variant_iid);
+
+        if let Some(variant_sid) = self.symbols.get_sid(variant_key) {
+            //here we need to actually store dup variants, as they may belong to dup items
+            let already_declared_span = self.symbols.first_declaration(variant_sid).span.into();
+            self.errors.push(
+                AnalysisError::DuplicateVariant {
+                    already_declared_span,
+                    duplicate_span: variant_span.into(),
+                }
+                .into(),
+            );
+        }
+
+        //TODO: insert the symbol regardless, as we only consider the first invokation of the symbol
+        let variant_sid = self.symbols.insert(variant_key, variant_span);
+        let variant_type = self.symbol_type(&variant.ty);
+        let variant_info = self.symbols.get_sinfo(variant_sid);
+        variant_info.ty = variant_type;
+
+        (variant_iid, variant_sid)
+    }
+
     fn symbol_type(&mut self, ty: &IdentTy) -> SymbolType {
         match ty {
             IdentTy::Type(spanned_ty) => SymbolType::BuiltInType(*spanned_ty),
@@ -227,10 +353,11 @@ impl Analyzer<'_> {
                     }
                 };
 
-                let adt_info = self.declarations.dinfo(adt_did);
+                let adt_info = self.declarations.first_declaration(adt_did);
                 if !matches!(
                     adt_info.ty,
-                    DeclarationType::PendingType | DeclarationType::ResolvedType(_)
+                    DeclarationType::Pending(Pending::Packing | Pending::Aor)
+                        | DeclarationType::Resolved(Resolved::Packing(_) | Resolved::Aor(_))
                 ) {
                     self.errors.push(
                         AnalysisError::NotAType {
@@ -277,9 +404,9 @@ impl Analyzer<'_> {
     ///doesnt check if the packing is already initialized, so the caller must make sure thats
     ///not the case
     ///NOTE: calls get_dinfo once, thus moving the 'at' pointer for packing declaration by 1
-    fn resolve(&mut self, did: DeclarationId, resolved_type: ResolvedType) {
+    fn resolve(&mut self, did: DeclarationId, resolved: Resolved) {
         let info = self.declarations.get_dinfo(did);
-        info.ty = DeclarationType::ResolvedType(resolved_type);
+        info.ty = DeclarationType::Resolved(resolved);
     }
 
     ///enters the given scope

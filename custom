@@ -5,7 +5,8 @@ packing Foo {
 
 aor Bar {
     Hell,
-    Heaven
+    Heaven,
+    Hell
 }
 
 packing Bar {
@@ -13,3 +14,13 @@ packing Bar {
     Heaven(u32),
     why(string)
 }
+
+api Hello also Bar{
+    //not a declaration, rather a symbol ig
+    proc foo[] {}
+
+    proc bar[] {}
+}
+
+//why not make this also then a symbol
+proc foo[] {}
