@@ -87,9 +87,8 @@ impl<'a> AstAnalyzer<'a> {
                 Item::Aor(aor) => {
                     analyzer.register_aor(aor);
                 }
-                Item::Procedure(_procedure) => {
-                    todo!()
-                    // analyzer.register_procedure(procedure);
+                Item::Procedure(procedure) => {
+                    analyzer.register_procedure(procedure);
                 }
                 Item::Methods(_methods) => {
                     todo!()

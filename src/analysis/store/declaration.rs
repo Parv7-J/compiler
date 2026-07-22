@@ -1,12 +1,13 @@
-use super::scope::ScopeStore;
-use crate::analysis::SymbolId;
-use crate::lexer::token::Span;
-use crate::parser::ast::Item;
-
-use super::{IdentId, ScopeId};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::ops::Deref;
+
+use super::SymbolType;
+use super::scope::ScopeStore;
+use super::{IdentId, ScopeId};
+use crate::analysis::SymbolId;
+use crate::lexer::token::Span;
+use crate::parser::ast::Item;
 
 ///uniquely identifies a declaration, in any scope
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -177,6 +178,6 @@ pub struct Api {
 
 #[derive(Debug, Clone)]
 pub struct Procedure {
-    pub arguments: Vec<DeclarationId>,
-    pub return_ty: HashMap<IdentId, DeclarationId>,
+    pub arguments: HashMap<IdentId, SymbolId>,
+    pub return_ty: Option<SymbolType>,
 }

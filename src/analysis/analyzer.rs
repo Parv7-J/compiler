@@ -110,34 +110,6 @@ impl Analyzer<'_> {
     //     (method_iid, method_did)
     // }
     //
-    // pub fn register_procedure(&mut self, procedure: &Procedure) -> (IdentId, DeclarationId) {
-    //     let ident_span = procedure.ident.0;
-    //     let procedure_iid = self.idents.insert(ident_span);
-    //     let procedure_did = self.did(ident_span);
-    //     let procedure_scope = self.declarations.dinfo(procedure_did).scope;
-    //     self.enter_scope(procedure_scope);
-    //
-    //     let mut arguments = HashMap::new();
-    //
-    //     for arg in &procedure.args {
-    //         let (iid, sid) = self.register_field(arg);
-    //         arguments.insert(iid, sid);
-    //     }
-    //
-    //     let return_ty = procedure
-    //         .return_value
-    //         .as_ref()
-    //         .map(|ty| self.symbol_type(ty));
-    //
-    //     let procedure_info = self.declarations.get_dinfo(procedure_did);
-    //     procedure_info.ty = DeclarationType::Resolved(Resolved::Procedure {
-    //         arguments,
-    //         return_ty,
-    //     });
-    //     self.exit_scope();
-    //
-    //     (procedure_iid, procedure_did)
-    // }
 
     // pub fn register_api(&mut self, api: &Api) -> DeclarationId {
     //     //1. this treats same named apis and types with the same 'did', which is correct as we dont
@@ -207,22 +179,51 @@ impl Analyzer<'_> {
     //     api_did
     // }
 
+    pub fn register_procedure(&mut self, procedure: &Procedure) -> (IdentId, DeclarationId) {
+        let ident_span = procedure.ident.0;
+        let procedure_iid = self.idents.insert(ident_span);
+        let procedure_did = self.did(ident_span);
+        let procedure_scope = self.declarations.dinfo(procedure_did).scope_id;
+        self.enter_scope(procedure_scope);
+
+        let mut arguments = HashMap::new();
+
+        for arg in &procedure.args {
+            let (iid, sid) = self.register_field(arg);
+            arguments.insert(iid, sid);
+        }
+
+        let return_ty = procedure
+            .return_value
+            .as_ref()
+            .map(|ty| self.symbol_type(ty));
+
+        let procedure_info = self.declarations.get_dinfo(procedure_did);
+        procedure_info.ty = DeclarationType::Procedure(Some(declaration::Procedure {
+            arguments,
+            return_ty,
+        }));
+        self.exit_scope();
+
+        (procedure_iid, procedure_did)
+    }
+
     pub fn register_packing(&mut self, packing: &Packing) -> DeclarationId {
         let packing_did = self.did(packing.ident.0);
         let packing_scope = self.declarations.dinfo(packing_did).scope_id;
         self.enter_scope(packing_scope);
 
-        let mut symbols = HashMap::new();
+        let mut fields = HashMap::new();
 
         for field in &packing.fields {
             let (iid, sid) = self.register_field(field);
-            symbols.insert(iid, sid);
+            fields.insert(iid, sid);
         }
 
         self.resolve(
             packing_did,
             DeclarationType::Packing(Some(declaration::Packing {
-                fields: symbols,
+                fields,
                 methods: None,
                 requires: None,
             })),
@@ -235,38 +236,25 @@ impl Analyzer<'_> {
     pub fn register_aor(&mut self, aor: &Aor) -> DeclarationId {
         let aor_did = self.did(aor.ident.0);
         let aor_scope = self.declarations.dinfo(aor_did).scope_id;
+
         self.enter_scope(aor_scope);
 
-        let mut symbols = HashMap::new();
+        let mut variants = HashMap::new();
 
         for variant in &aor.variants {
             match variant {
                 Variant::Field(field) => {
-                    //TODO: make register_variant which pushes a duplicate variant not duplicate
-                    //field error
-                    let (iid, sid) = self.register_variant(field);
-                    symbols.insert(iid, sid);
+                    let (iid, sid) = self.register_variant(field.ident.0);
+                    let ty = self.symbol_type(&field.ty);
+                    let s_info = self.symbols.get_sinfo(sid);
+                    s_info.ty = ty;
+                    variants.insert(iid, sid);
                 }
-                Variant::SpannedIdent(spanned_ident) => {
-                    let variant_span = spanned_ident.0;
-                    let variant_iid = self.idents.insert(variant_span);
-                    let variant_key = SymbolKey::new(self.scope, variant_iid);
-                    if let Some(variant_sid) = self.symbols.get_sid(variant_key) {
-                        let already_declared_span =
-                            self.symbols.first_declaration(variant_sid).span.into();
-                        self.errors.push(
-                            AnalysisError::DuplicateVariant {
-                                already_declared_span,
-                                duplicate_span: variant_span.into(),
-                            }
-                            .into(),
-                        );
-                        continue;
-                    }
-                    let variant_sid = self.symbols.insert(variant_key, variant_span);
-                    let variant_info = self.symbols.get_sinfo(variant_sid);
-                    variant_info.ty = SymbolType::Variant;
-                    symbols.insert(variant_iid, variant_sid);
+                Variant::SpannedIdent(ident) => {
+                    let (iid, sid) = self.register_variant(ident.0);
+                    let s_info = self.symbols.get_sinfo(sid);
+                    s_info.ty = SymbolType::Variant;
+                    variants.insert(iid, sid);
                 }
             }
         }
@@ -274,11 +262,12 @@ impl Analyzer<'_> {
         self.resolve(
             aor_did,
             DeclarationType::Aor(Some(declaration::Aor {
-                variants: symbols,
+                variants,
                 methods: None,
                 requires: None,
             })),
         );
+
         self.exit_scope();
 
         aor_did
@@ -293,7 +282,6 @@ impl Analyzer<'_> {
         let field_key = SymbolKey::new(self.scope, field_iid);
 
         if let Some(field_sid) = self.symbols.get_sid(field_key) {
-            //here we need to actually store dup fields, as they may belong to dup items
             let already_declared_span = self.symbols.first_declaration(field_sid).span.into();
             self.errors.push(
                 AnalysisError::DuplicateField {
@@ -304,7 +292,6 @@ impl Analyzer<'_> {
             );
         }
 
-        //TODO: insert the symbol regardless, as we only consider the first invokation of the symbol
         let field_sid = self.symbols.insert(field_key, field_span);
         let field_type = self.symbol_type(&field.ty);
         let field_info = self.symbols.get_sinfo(field_sid);
@@ -313,13 +300,10 @@ impl Analyzer<'_> {
         (field_iid, field_sid)
     }
 
-    fn register_variant(&mut self, variant: &Field) -> (IdentId, SymbolId) {
-        let variant_span = variant.ident.0;
+    fn register_variant(&mut self, variant_span: Span) -> (IdentId, SymbolId) {
         let variant_iid = self.idents.insert(variant_span);
         let variant_key = SymbolKey::new(self.scope, variant_iid);
-
         if let Some(variant_sid) = self.symbols.get_sid(variant_key) {
-            //here we need to actually store dup variants, as they may belong to dup items
             let already_declared_span = self.symbols.first_declaration(variant_sid).span.into();
             self.errors.push(
                 AnalysisError::DuplicateVariant {
@@ -329,13 +313,7 @@ impl Analyzer<'_> {
                 .into(),
             );
         }
-
-        //TODO: insert the symbol regardless, as we only consider the first invokation of the symbol
         let variant_sid = self.symbols.insert(variant_key, variant_span);
-        let variant_type = self.symbol_type(&variant.ty);
-        let variant_info = self.symbols.get_sinfo(variant_sid);
-        variant_info.ty = variant_type;
-
         (variant_iid, variant_sid)
     }
 

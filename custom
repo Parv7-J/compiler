@@ -1,16 +1,6 @@
-packing Foo {
-    hello(i32),
-    bar(Bar)
-}
+proc foo[]{}
+packing foo {}
 
-aor Bar {
-    Hell,
-    Heaven,
-    Hell
-}
-
-packing Bar {
-    why(i32),
-    Heaven(u32),
-    why(string)
+packing hello {
+    f(foo)
 }
