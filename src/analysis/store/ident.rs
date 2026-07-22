@@ -1,13 +1,25 @@
-use super::IdentId;
-use crate::lexer::token::Span;
+use std::{collections::HashMap, ops::Deref};
 
-use std::collections::HashMap;
+use crate::Span;
+
+///identifies a sequence of letters, and thus 'foo' appearing in any place would have the same
+///IdentId
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct IdentId(pub usize);
+
+impl Deref for IdentId {
+    type Target = usize;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct IdentStore<'a> {
-    pub input: &'a str,
-    pub db: Vec<String>,
-    pub ids: HashMap<String, IdentId>,
+    input: &'a str,
+    db: Vec<String>,
+    ids: HashMap<String, IdentId>,
 }
 
 impl<'a> IdentStore<'a> {

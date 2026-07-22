@@ -1,15 +1,28 @@
+use super::scope::ScopeStore;
 use crate::analysis::SymbolId;
-use crate::analysis::SymbolType;
 use crate::lexer::token::Span;
 use crate::parser::ast::Item;
 
-use super::{DeclarationId, IdentId, ScopeId};
+use super::{IdentId, ScopeId};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::ops::Deref;
+
+///uniquely identifies a declaration, in any scope
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct DeclarationId(pub usize);
+
+impl Deref for DeclarationId {
+    type Target = usize;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct DeclarationStore {
-    pub scopes: Scopes,
+    pub scopes: ScopeStore,
     pub ids: HashMap<DeclarationKey, DeclarationId>,
     pub db: Vec<DeclarationEntry>,
 }
@@ -18,29 +31,6 @@ pub struct DeclarationStore {
 pub struct DeclarationKey {
     parent_scope_id: ScopeId,
     ident_id: IdentId,
-}
-
-#[derive(Debug, Clone)]
-pub struct Scopes {
-    parents: Vec<ScopeId>,
-}
-
-impl Scopes {
-    pub fn new() -> Self {
-        Self {
-            parents: vec![ScopeId(0)],
-        }
-    }
-
-    pub fn add_scope(&mut self, parent: ScopeId) -> ScopeId {
-        let len = self.parents.len();
-        self.parents.push(parent);
-        ScopeId(len)
-    }
-
-    pub fn parent_scope(&self, scope: ScopeId) -> ScopeId {
-        self.parents[scope.0]
-    }
 }
 
 impl DeclarationKey {
@@ -97,40 +87,6 @@ pub struct DeclarationInfo {
     pub ty: DeclarationType,
 }
 
-#[derive(Debug, Clone)]
-pub enum DeclarationType {
-    Pending(Pending),
-    Resolved(Resolved),
-}
-
-#[derive(Debug, Clone)]
-pub enum Pending {
-    Packing,
-    Aor,
-    Procedure,
-    Api,
-    // Get,
-    // Block,
-}
-
-#[derive(Debug, Clone)]
-pub struct RequireDeclaration {
-    //require Clone for Foo; -> 1st el in vec
-    //require Clone for Foo; -> 2nd el in vec
-    //require Debug for Foo;
-
-    //key is Clone, Debugs 'did'
-    //value is a vec of implementations
-    pub implemented: HashMap<DeclarationId, Vec<HashMap<IdentId, DeclarationId>>>,
-}
-
-#[derive(Debug, Clone)]
-pub struct MethodsDeclaration {
-    //methods Hello {fn foo; fn bar;} -> 1st el in methods vec
-    //methods Hello {fn baz; fn quox;} -> 2nd el in methods vec
-    //each el is a mapping from fn name to 'did' => for quick conversion
-    pub methods: Vec<HashMap<IdentId, DeclarationId>>,
-}
 struct Packing {
     fields: Option<HashMap<IdentId, SymbolId>>,
     methods: Option<Vec<HashMap<IdentId, DeclarationId>>>,
@@ -144,19 +100,8 @@ struct Aor {
 }
 
 struct Api {
-    super_apis: Vec<DeclarationId>,
-    procedures: HashMap<IdentId, DeclarationId>,
-}
-
-#[derive(Debug, Clone)]
-pub enum Resolved {
-    Packing(HashMap<IdentId, SymbolId>),
-    Aor(HashMap<IdentId, SymbolId>),
-    Procedure {
-        arguments: HashMap<IdentId, SymbolId>,
-        return_ty: Option<SymbolType>,
-    },
-    Api {},
+    supers: Option<Vec<DeclarationId>>,
+    methods: Option<HashMap<IdentId, DeclarationId>>,
 }
 
 impl DeclarationStore {

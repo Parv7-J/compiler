@@ -1,14 +1,27 @@
-use crate::lexer::token::Span;
-use crate::parser::ast::SpannedTy;
-use crate::{analysis::SymbolId, parser::ast::ArrType};
-
 use super::{DeclarationId, IdentId, ScopeId};
 use std::collections::{HashMap, hash_map::Entry};
+use std::ops::Deref;
+
+use crate::lexer::token::Span;
+use crate::parser::ast::ArrType;
+use crate::parser::ast::SpannedTy;
+
+///uniquely identifies a symbol, in any declaration and any scope
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SymbolId(pub usize);
 
 #[derive(Debug, Clone)]
 pub struct SymbolStore {
-    pub ids: HashMap<SymbolKey, SymbolId>,
-    pub db: Vec<SymbolEntry>,
+    ids: HashMap<SymbolKey, SymbolId>,
+    db: Vec<SymbolEntry>,
+}
+
+impl Deref for SymbolId {
+    type Target = usize;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
