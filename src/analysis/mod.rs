@@ -1,4 +1,4 @@
-use crate::parser::ast::*;
+use crate::{analysis::store::declaration::DeclarationKey, parser::ast::*};
 use std::sync::Arc;
 
 mod analyzer;
@@ -87,8 +87,9 @@ impl<'a> AstAnalyzer<'a> {
                 Item::Aor(aor) => {
                     analyzer.register_aor(aor);
                 }
-                Item::Procedure(procedure) => {
-                    analyzer.register_procedure(procedure);
+                Item::Procedure(_procedure) => {
+                    todo!()
+                    // analyzer.register_procedure(procedure);
                 }
                 Item::Methods(_methods) => {
                     todo!()

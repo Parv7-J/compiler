@@ -1,6 +1,7 @@
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 
+#[allow(unused)]
 #[derive(Error, Diagnostic, Debug, Clone)]
 pub enum AnalysisError {
     #[error("Duplicate Item Name")]
