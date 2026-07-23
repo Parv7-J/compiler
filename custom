@@ -1,6 +1,21 @@
-packing foo {}
+proc hello[] {
+    packing foo {}
 
-api Mamamia {
-    proc foo[f(foo)] {}
+    api Mamamia {
+        proc foo[f(i32)] {}
+    }
+
+    methods foohy {
+        /**proc foo[a(i32)]: i32 {
+
+        }
+        **/
+
+        proc init[] {}
+
+        proc foo[b(huh),c(*i32),d(arr[*string])]: i32 {
+
+        }
+    }
 }
 

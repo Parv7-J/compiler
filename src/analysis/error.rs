@@ -10,7 +10,7 @@ pub enum AnalysisError {
         #[label("duplicate item")]
         duplicate_span: SourceSpan,
         #[label("item already defined with the same name")]
-        already_declared_span: SourceSpan,
+        declared_span: SourceSpan,
     },
     #[error("Duplicate Method")]
     #[diagnostic(help("rename a method"))]
@@ -18,7 +18,7 @@ pub enum AnalysisError {
         #[label("duplicate method")]
         duplicate_span: SourceSpan,
         #[label("method already defined with the same name")]
-        already_declared_span: SourceSpan,
+        declared_span: SourceSpan,
     },
     #[error("Duplicate Field Name")]
     #[diagnostic(help("rename a field"))]
@@ -26,7 +26,7 @@ pub enum AnalysisError {
         #[label("duplicate field")]
         duplicate_span: SourceSpan,
         #[label("field already defined with the same name")]
-        already_declared_span: SourceSpan,
+        declared_span: SourceSpan,
     },
     #[error("Duplicate Variant Name")]
     #[diagnostic(help("rename a variant"))]
@@ -34,7 +34,7 @@ pub enum AnalysisError {
         #[label("duplicate variant")]
         duplicate_span: SourceSpan,
         #[label("variant already defined with the same name")]
-        already_declared_span: SourceSpan,
+        declared_span: SourceSpan,
     },
     #[error("Undefined Type")]
     #[diagnostic(help("define the type"))]

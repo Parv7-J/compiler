@@ -5,10 +5,12 @@ use crate::{
 use std::sync::Arc;
 
 mod analyzer;
+mod block;
 mod error;
 mod store;
 
 use analyzer::*;
+use block::*;
 use error::*;
 use store::*;
 
@@ -56,23 +58,23 @@ impl<'a> AstAnalyzer<'a> {
 
     pub fn collect_top_level_definitions(&mut self) {
         let analyzer = &mut self.analyzer;
-        let items = &self.ast.items;
+        let item_iter = self
+            .ast
+            .items
+            .iter()
+            .filter(|item| !matches!(item, Item::Methods(_) | Item::Require(_)));
 
-        for item in items {
-            if matches!(item, Item::Methods(_) | Item::Require(_)) {
-                continue;
-            }
-
+        for item in item_iter {
             let item_span = item.span();
             let item_iid = analyzer.idents.insert(item_span);
 
             let item_key = DeclarationKey::new(analyzer.scope, item_iid);
 
             if let Some(item_did) = analyzer.declarations.get_did(item_key) {
-                let already_declared_span = analyzer.declarations.first_declaration(item_did).span;
+                let declared_span = analyzer.declarations.first_declaration(item_did).span;
                 analyzer.errors.push(
                     AnalysisError::DuplicateItem {
-                        already_declared_span: already_declared_span.into(),
+                        declared_span: declared_span.into(),
                         duplicate_span: item_span.into(),
                     }
                     .into(),
@@ -84,15 +86,13 @@ impl<'a> AstAnalyzer<'a> {
                 Item::Aor(_) => DeclarationType::aor(),
                 Item::Procedure(_) => DeclarationType::Procedure(None),
                 Item::Api(_) => DeclarationType::Api(None),
-                _ => {
-                    unreachable!("insert should only be called on types, functions, and interfaces")
-                }
+                _ => unreachable!("filtered"),
             };
 
             analyzer.declarations.insert(item_key, item_span, ty);
         }
 
-        for item in items {
+        for item in &self.ast.items {
             match item {
                 Item::Packing(packing) => {
                     analyzer.register_packing(packing);
@@ -103,9 +103,8 @@ impl<'a> AstAnalyzer<'a> {
                 Item::Procedure(procedure) => {
                     analyzer.register_procedure(procedure);
                 }
-                Item::Methods(_methods) => {
-                    todo!()
-                    // analyzer.register_methods(methods);
+                Item::Methods(methods) => {
+                    analyzer.register_methods(methods);
                 }
                 Item::Api(api) => {
                     analyzer.register_api(api);
@@ -114,6 +113,34 @@ impl<'a> AstAnalyzer<'a> {
                 Item::Get(_get) => todo!(),
                 Item::Block(_) => unreachable!(),
             };
+        }
+
+        analyzer.declarations.db.iter_mut().for_each(|ent| {
+            ent.at = 0;
+        });
+        analyzer.symbols.db.iter_mut().for_each(|ent| {
+            ent.at = 0;
+        });
+        analyzer.declarations.unknown.values_mut().for_each(|ent| {
+            ent.at = 0;
+        })
+    }
+
+    fn we_can_go_deeper(&mut self) {
+        let analyzer = &mut self.analyzer;
+        let items = &self.ast.items;
+        for item in items {
+            match item {
+                Item::Procedure(procedure) => {
+                    analyzer.get_procedure(procedure);
+                }
+                Item::Methods(methods) => todo!(),
+                Item::Api(api) => todo!(),
+                Item::Require(require) => todo!(),
+                Item::Get(get) => todo!(),
+                Item::Block(block) => todo!(),
+                _ => {}
+            }
         }
     }
 }

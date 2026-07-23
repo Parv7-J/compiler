@@ -25,7 +25,7 @@ pub struct DeclarationStore {
     pub scope_store: ScopeStore,
     pub ids: HashMap<DeclarationKey, DeclarationId>,
     pub db: Vec<DeclarationEntry>,
-    pub unknown: HashMap<DeclarationKey, DeclarationEntry>,
+    pub unknown: HashMap<DeclarationKey, UnknownEntry>,
 }
 
 impl DeclarationStore {
@@ -38,17 +38,18 @@ impl DeclarationStore {
         }
     }
 
-    ///inserts the IdentId inside the store, returning it or
-    ///panics because we have two duplicate interns, and thus two duplicate named declarations, even though
-    ///they may be of different type
     pub fn insert(
         &mut self,
         key: DeclarationKey,
         span: Span,
         ty: DeclarationType,
     ) -> DeclarationId {
-        let scope_id = self.scope_store.new_scope(key.scope_id);
-        let d_info = DeclarationInfo { scope_id, span, ty };
+        let new_scope = self.new_scope(key.scope_id);
+        let d_info = DeclarationInfo {
+            scope_id: new_scope,
+            span,
+            ty,
+        };
         match self.ids.entry(key) {
             Entry::Occupied(occupied_entry) => {
                 let did = *occupied_entry.get();
@@ -64,27 +65,19 @@ impl DeclarationStore {
         }
     }
 
-    pub fn insert_unknown(&mut self, key: DeclarationKey, span: Span, ty: DeclarationType) {
-        match &ty {
-            DeclarationType::UnknownMethods(_) => {
-                let scope_id = self.scope_store.new_scope(key.scope_id);
-                let d_info = DeclarationInfo {
-                    scope_id,
-                    span,
-                    ty: ty.clone(),
-                };
-
-                match self.unknown.entry(key) {
-                    Entry::Occupied(mut occupied_entry) => {
-                        occupied_entry.get_mut().info.push(d_info);
-                    }
-                    Entry::Vacant(vacant_entry) => {
-                        vacant_entry.insert(DeclarationEntry::new(d_info));
-                    }
-                };
+    pub fn insert_unknown(&mut self, key: DeclarationKey, span: Span, ty: UnknownType) {
+        let new_scope = self.new_scope(key.scope_id);
+        let u_info = UnknownInfo {
+            scope_id: new_scope,
+            span,
+            ty,
+        };
+        match self.unknown.entry(key) {
+            Entry::Occupied(mut occupied_entry) => {
+                occupied_entry.get_mut().info.push(u_info);
             }
-            _ => {
-                unreachable!()
+            Entry::Vacant(vacant_entry) => {
+                vacant_entry.insert(UnknownEntry::new(u_info));
             }
         }
     }
@@ -145,6 +138,8 @@ pub struct DeclarationKey {
 }
 
 impl DeclarationKey {
+    ///'scope_id': scope to look in
+    ///'ident_id': identifier to look for
     pub fn new(scope_id: ScopeId, ident_id: IdentId) -> Self {
         Self { scope_id, ident_id }
     }
@@ -167,9 +162,43 @@ impl DeclarationEntry {
 
 #[derive(Debug, Clone)]
 pub struct DeclarationInfo {
+    ///'scope_id': scope owned by the declaration
     pub scope_id: ScopeId,
+    ///'span': span of the declaration's identifier
     pub span: Span,
+    ///'ty': type of declaration
     pub ty: DeclarationType,
+}
+
+#[derive(Debug, Clone)]
+pub struct UnknownEntry {
+    pub at: usize,
+    pub info: Vec<UnknownInfo>,
+}
+
+impl UnknownEntry {
+    pub fn new(info: UnknownInfo) -> Self {
+        Self {
+            at: 0,
+            info: vec![info],
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct UnknownInfo {
+    ///'scope_id': scope owned by the declaration
+    pub scope_id: ScopeId,
+    ///'span': span of the declaration's identifier
+    pub span: Span,
+    ///'ty': type of declaration
+    pub ty: UnknownType,
+}
+
+#[derive(Debug, Clone)]
+pub enum UnknownType {
+    UnknownMethods(HashMap<IdentId, DeclarationId>),
+    UnknowRequires,
 }
 
 #[derive(Debug, Clone)]
@@ -178,7 +207,6 @@ pub enum DeclarationType {
     Aor(Aor),
     Procedure(Option<Procedure>),
     Api(Option<Api>),
-    UnknownMethods(HashMap<IdentId, DeclarationId>),
 }
 
 impl DeclarationType {

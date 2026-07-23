@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use super::*;
 use crate::{
-    analysis::store::declaration::{DeclarationKey, DeclarationType},
+    analysis::store::declaration::{DeclarationKey, DeclarationType, UnknownType},
     lexer::token::Span,
 };
 
@@ -21,7 +21,8 @@ impl Analyzer<'_> {
     pub fn register_methods(&mut self, methods: &Methods) {
         let type_span = methods.ident.0;
         let type_iid = self.idents.insert(type_span);
-        match self.find_declaration(type_iid) {
+        let type_key = DeclarationKey::new(self.scope, type_iid);
+        match self.declarations.get_did(type_key) {
             Some(did) => {
                 let type_info = self.declarations.first_declaration(did);
                 if !matches!(
@@ -49,11 +50,12 @@ impl Analyzer<'_> {
 
         let methods_scope = self.declarations.new_scope(self.scope);
         self.enter_scope(methods_scope);
-        self.register_karo(&methods.procedures);
+        self.register_method_list(&methods.procedures);
         let procedures = self.check_init(&methods.procedures, type_span);
 
         let type_info = self
-            .find_declaration(type_iid)
+            .declarations
+            .get_did(type_key)
             .map(|did| self.declarations.first_declaration_mut(did));
 
         if let Some(info) = type_info {
@@ -72,13 +74,13 @@ impl Analyzer<'_> {
             }
         }
 
+        self.exit_scope();
+
         self.declarations.insert_unknown(
             DeclarationKey::new(self.scope, type_iid),
             type_span,
-            DeclarationType::UnknownMethods(procedures),
+            UnknownType::UnknownMethods(procedures),
         );
-
-        self.exit_scope();
     }
 
     pub fn check_init(
@@ -102,32 +104,6 @@ impl Analyzer<'_> {
         inner_methods
     }
 
-    pub fn register_karo(&mut self, procedures: &[Procedure]) {
-        for procedure in procedures {
-            let procedure_span = procedure.ident.0;
-            let procedure_iid = self.idents.insert(procedure_span);
-
-            let procedure_key = DeclarationKey::new(self.scope, procedure_iid);
-
-            if let Some(procedure_did) = self.declarations.get_did(procedure_key) {
-                let already_declared_span = self.declarations.first_declaration(procedure_did).span;
-                self.errors.push(
-                    AnalysisError::DuplicateMethod {
-                        already_declared_span: already_declared_span.into(),
-                        duplicate_span: procedure_span.into(),
-                    }
-                    .into(),
-                );
-            }
-
-            self.declarations.insert(
-                procedure_key,
-                procedure_span,
-                DeclarationType::Procedure(None),
-            );
-        }
-    }
-
     pub fn register_api(&mut self, api: &Api) -> DeclarationId {
         let api_did = self.did(api.ident.0);
 
@@ -141,8 +117,7 @@ impl Analyzer<'_> {
 
         let api_scope = self.declarations.dinfo(api_did).scope_id;
         self.enter_scope(api_scope);
-
-        self.register_karo(&api.procedures);
+        self.register_method_list(&api.procedures);
 
         let mut methods = HashMap::new();
         for procedure in &api.procedures {
@@ -155,6 +130,63 @@ impl Analyzer<'_> {
         self.exit_scope();
 
         api_did
+    }
+
+    fn api_did(&mut self, s_span: Span) -> Option<DeclarationId> {
+        let s_iid = self.idents.insert(s_span);
+
+        let s_did = match self.find_declaration(s_iid) {
+            Some(did) => did,
+            None => {
+                self.errors.push(
+                    AnalysisError::UndefinedApi {
+                        span: s_span.into(),
+                    }
+                    .into(),
+                );
+                return None;
+            }
+        };
+
+        let s_info = self.declarations.first_declaration(s_did);
+        if !matches!(s_info.ty, DeclarationType::Api(_)) {
+            self.errors.push(
+                AnalysisError::NotAnApi {
+                    span: s_span.into(),
+                    item_span: s_info.span.into(),
+                }
+                .into(),
+            );
+            return None;
+        }
+
+        Some(s_did)
+    }
+
+    fn register_method_list(&mut self, procedures: &[Procedure]) {
+        for procedure in procedures {
+            let procedure_span = procedure.ident.0;
+            let procedure_iid = self.idents.insert(procedure_span);
+
+            let procedure_key = DeclarationKey::new(self.scope, procedure_iid);
+
+            if let Some(procedure_did) = self.declarations.get_did(procedure_key) {
+                let declared_span = self.declarations.first_declaration(procedure_did).span;
+                self.errors.push(
+                    AnalysisError::DuplicateMethod {
+                        declared_span: declared_span.into(),
+                        duplicate_span: procedure_span.into(),
+                    }
+                    .into(),
+                );
+            }
+
+            self.declarations.insert(
+                procedure_key,
+                procedure_span,
+                DeclarationType::Procedure(None),
+            );
+        }
     }
 
     pub fn register_procedure(&mut self, procedure: &Procedure) -> (IdentId, DeclarationId) {
@@ -201,7 +233,7 @@ impl Analyzer<'_> {
         if let DeclarationType::Packing(ref mut packing) = info.ty {
             packing.set_fields(fields);
         } else {
-            unreachable!()
+            unreachable!("a packing cant be anything else")
         }
 
         self.exit_scope();
@@ -237,8 +269,9 @@ impl Analyzer<'_> {
         if let DeclarationType::Aor(ref mut aor) = info.ty {
             aor.set_variants(variants);
         } else {
-            unreachable!()
+            unreachable!("an aor cant be anything else")
         }
+
         self.exit_scope();
 
         aor_did
@@ -253,10 +286,10 @@ impl Analyzer<'_> {
         let field_key = SymbolKey::new(self.scope, field_iid);
 
         if let Some(field_sid) = self.symbols.get_sid(field_key) {
-            let already_declared_span = self.symbols.first_declaration(field_sid).span.into();
+            let declared_span = self.symbols.first_declaration(field_sid).span.into();
             self.errors.push(
                 AnalysisError::DuplicateField {
-                    already_declared_span,
+                    declared_span,
                     duplicate_span: field_span.into(),
                 }
                 .into(),
@@ -274,49 +307,20 @@ impl Analyzer<'_> {
     fn register_variant(&mut self, variant_span: Span) -> (IdentId, SymbolId) {
         let variant_iid = self.idents.insert(variant_span);
         let variant_key = SymbolKey::new(self.scope, variant_iid);
+
         if let Some(variant_sid) = self.symbols.get_sid(variant_key) {
-            let already_declared_span = self.symbols.first_declaration(variant_sid).span.into();
+            let declared_span = self.symbols.first_declaration(variant_sid).span.into();
             self.errors.push(
                 AnalysisError::DuplicateVariant {
-                    already_declared_span,
+                    declared_span,
                     duplicate_span: variant_span.into(),
                 }
                 .into(),
             );
         }
+
         let variant_sid = self.symbols.insert(variant_key, variant_span);
         (variant_iid, variant_sid)
-    }
-
-    fn api_did(&mut self, s_span: Span) -> Option<DeclarationId> {
-        let s_iid = self.idents.insert(s_span);
-
-        let s_did = match self.find_declaration(s_iid) {
-            Some(did) => did,
-            None => {
-                self.errors.push(
-                    AnalysisError::UndefinedApi {
-                        span: s_span.into(),
-                    }
-                    .into(),
-                );
-                return None;
-            }
-        };
-
-        let s_info = self.declarations.first_declaration(s_did);
-        if !matches!(s_info.ty, DeclarationType::Api(_)) {
-            self.errors.push(
-                AnalysisError::NotAnApi {
-                    span: s_span.into(),
-                    item_span: s_info.span.into(),
-                }
-                .into(),
-            );
-            return None;
-        }
-
-        Some(s_did)
     }
 
     fn symbol_type(&mut self, ty: &IdentTy) -> SymbolType {
@@ -380,7 +384,7 @@ impl Analyzer<'_> {
 
     ///panics if span was not already inserted, in both identstore(a call to 'contains' just for checking logic)
     ///and declarationstore
-    fn did(&mut self, span: Span) -> DeclarationId {
+    pub fn did(&mut self, span: Span) -> DeclarationId {
         let iid = self.idents.contains(span).unwrap();
         let key = DeclarationKey::new(self.scope, iid);
         self.declarations.get_did(key).unwrap()
@@ -396,19 +400,18 @@ impl Analyzer<'_> {
     }
 
     ///enters the given scope
-    fn enter_scope(&mut self, scope: ScopeId) {
+    pub fn enter_scope(&mut self, scope: ScopeId) {
         self.scope = scope;
     }
 
     ///exits the current scope, and returns to the parent scope
-    fn exit_scope(&mut self) {
+    pub fn exit_scope(&mut self) {
         self.scope = self.declarations.parent_scope(self.scope);
     }
 
     ///starts from the current scope to the outermost scope, looking for a declaration matching the
     ///ident
     fn find_declaration(&self, iid: IdentId) -> Option<DeclarationId> {
-        println!("Scope: {:?} IdentId: {iid:?}", self.scope);
         let mut scope = self.scope;
         loop {
             let key = DeclarationKey::new(scope, iid);

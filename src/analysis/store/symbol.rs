@@ -12,8 +12,8 @@ pub struct SymbolId(pub usize);
 
 #[derive(Debug, Clone)]
 pub struct SymbolStore {
-    ids: HashMap<SymbolKey, SymbolId>,
-    db: Vec<SymbolEntry>,
+    pub ids: HashMap<SymbolKey, SymbolId>,
+    pub db: Vec<SymbolEntry>,
 }
 
 impl Deref for SymbolId {
