@@ -1,6 +1,6 @@
-proc foo[]{}
 packing foo {}
 
-packing hello {
-    f(foo)
+api Mamamia {
+    proc foo[f(foo)] {}
 }
+

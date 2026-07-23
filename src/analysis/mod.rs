@@ -1,4 +1,7 @@
-use crate::{analysis::store::declaration::DeclarationKey, parser::ast::*};
+use crate::{
+    analysis::store::declaration::{DeclarationKey, DeclarationType},
+    parser::ast::*,
+};
 use std::sync::Arc;
 
 mod analyzer;
@@ -76,7 +79,17 @@ impl<'a> AstAnalyzer<'a> {
                 );
             }
 
-            analyzer.declarations.insert(item_key, item_span, item);
+            let ty = match item {
+                Item::Packing(_) => DeclarationType::packing(),
+                Item::Aor(_) => DeclarationType::aor(),
+                Item::Procedure(_) => DeclarationType::Procedure(None),
+                Item::Api(_) => DeclarationType::Api(None),
+                _ => {
+                    unreachable!("insert should only be called on types, functions, and interfaces")
+                }
+            };
+
+            analyzer.declarations.insert(item_key, item_span, ty);
         }
 
         for item in items {
@@ -94,9 +107,8 @@ impl<'a> AstAnalyzer<'a> {
                     todo!()
                     // analyzer.register_methods(methods);
                 }
-                Item::Api(_api) => {
-                    todo!()
-                    // analyzer.register_api(api);
+                Item::Api(api) => {
+                    analyzer.register_api(api);
                 }
                 Item::Require(_require) => todo!(),
                 Item::Get(_get) => todo!(),

@@ -12,6 +12,14 @@ pub enum AnalysisError {
         #[label("item already defined with the same name")]
         already_declared_span: SourceSpan,
     },
+    #[error("Duplicate Method")]
+    #[diagnostic(help("rename a method"))]
+    DuplicateMethod {
+        #[label("duplicate method")]
+        duplicate_span: SourceSpan,
+        #[label("method already defined with the same name")]
+        already_declared_span: SourceSpan,
+    },
     #[error("Duplicate Field Name")]
     #[diagnostic(help("rename a field"))]
     DuplicateField {
