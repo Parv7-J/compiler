@@ -1,7 +1,4 @@
-use crate::{
-    analysis::store::declaration::{DeclarationKey, DeclarationType},
-    parser::ast::*,
-};
+use crate::parser::ast::*;
 use std::sync::Arc;
 
 mod analyzer;
@@ -10,7 +7,6 @@ mod error;
 mod store;
 
 use analyzer::*;
-use block::*;
 use error::*;
 use store::*;
 
@@ -35,7 +31,9 @@ impl<'a> AstAnalyzer<'a> {
     }
 
     pub fn analyze(mut self) -> Analyzer<'a> {
-        self.collect_top_level_definitions();
+        let items = self.ast.items.iter().collect::<Vec<_>>();
+        self.analyzer.collect(items.as_ref());
+        self.analyzer.recurse(items.as_ref());
 
         let source = Arc::new(miette::NamedSource::new(
             "language",
@@ -54,93 +52,5 @@ impl<'a> AstAnalyzer<'a> {
         }
 
         self.analyzer
-    }
-
-    pub fn collect_top_level_definitions(&mut self) {
-        let analyzer = &mut self.analyzer;
-        let item_iter = self
-            .ast
-            .items
-            .iter()
-            .filter(|item| !matches!(item, Item::Methods(_) | Item::Require(_)));
-
-        for item in item_iter {
-            let item_span = item.span();
-            let item_iid = analyzer.idents.insert(item_span);
-
-            let item_key = DeclarationKey::new(analyzer.scope, item_iid);
-
-            if let Some(item_did) = analyzer.declarations.get_did(item_key) {
-                let declared_span = analyzer.declarations.first_declaration(item_did).span;
-                analyzer.errors.push(
-                    AnalysisError::DuplicateItem {
-                        declared_span: declared_span.into(),
-                        duplicate_span: item_span.into(),
-                    }
-                    .into(),
-                );
-            }
-
-            let ty = match item {
-                Item::Packing(_) => DeclarationType::packing(),
-                Item::Aor(_) => DeclarationType::aor(),
-                Item::Procedure(_) => DeclarationType::Procedure(None),
-                Item::Api(_) => DeclarationType::Api(None),
-                _ => unreachable!("filtered"),
-            };
-
-            analyzer.declarations.insert(item_key, item_span, ty);
-        }
-
-        for item in &self.ast.items {
-            match item {
-                Item::Packing(packing) => {
-                    analyzer.register_packing(packing);
-                }
-                Item::Aor(aor) => {
-                    analyzer.register_aor(aor);
-                }
-                Item::Procedure(procedure) => {
-                    analyzer.register_procedure(procedure);
-                }
-                Item::Methods(methods) => {
-                    analyzer.register_methods(methods);
-                }
-                Item::Api(api) => {
-                    analyzer.register_api(api);
-                }
-                Item::Require(_require) => todo!(),
-                Item::Get(_get) => todo!(),
-                Item::Block(_) => unreachable!(),
-            };
-        }
-
-        analyzer.declarations.db.iter_mut().for_each(|ent| {
-            ent.at = 0;
-        });
-        analyzer.symbols.db.iter_mut().for_each(|ent| {
-            ent.at = 0;
-        });
-        analyzer.declarations.unknown.values_mut().for_each(|ent| {
-            ent.at = 0;
-        })
-    }
-
-    fn we_can_go_deeper(&mut self) {
-        let analyzer = &mut self.analyzer;
-        let items = &self.ast.items;
-        for item in items {
-            match item {
-                Item::Procedure(procedure) => {
-                    analyzer.get_procedure(procedure);
-                }
-                Item::Methods(methods) => todo!(),
-                Item::Api(api) => todo!(),
-                Item::Require(require) => todo!(),
-                Item::Get(get) => todo!(),
-                Item::Block(block) => todo!(),
-                _ => {}
-            }
-        }
     }
 }

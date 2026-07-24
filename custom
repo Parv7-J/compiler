@@ -1,21 +1,27 @@
-proc hello[] {
-    packing foo {}
-
-    api Mamamia {
-        proc foo[f(i32)] {}
-    }
-
-    methods foohy {
-        /**proc foo[a(i32)]: i32 {
+proc foo[]{ //1
+    proc bar[]{ //3
+        proc baz[packed(Packed)]{ //7
 
         }
-        **/
+    }
 
-        proc init[] {}
+    methods Packed { //4
+        proc init[] {} //5
 
-        proc foo[b(huh),c(*i32),d(arr[*string])]: i32 {
+        proc foo[] { //6
+            packing Packed { //8
+                fields(arr[string]),
+                values(arr[usize])
+            }
 
+            methods Packed { //9
+                proc init[] {} //10
+            }    
         }
     }
 }
 
+packing Packed { //2
+    fields(arr[string]),
+    values(arr[usize])
+}
