@@ -41,10 +41,10 @@ pub enum BlockItem {
     Item(Item),
     Stmt(Stmt),
 }
+
 #[derive(Debug, Clone)]
 pub enum Expr {
     Atom(Atom),
-    Cons(SpannedOperator, Vec<Expr>),
     Prefix {
         op: SpannedOperator,
         operand: Box<Expr>,

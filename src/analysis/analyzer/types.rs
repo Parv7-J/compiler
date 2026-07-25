@@ -62,7 +62,7 @@ impl Analyzer<'_> {
         let field_iid = self.idents.insert(field_span);
         let field_key = SymbolKey::new(self.scope, field_iid);
 
-        if let Some(field_sid) = self.symbols.get_sid(field_key) {
+        if let Some(field_sid) = self.symbols.get(field_key) {
             let declared_span = self.symbols.refer(field_sid).span.into();
             self.errors.push(
                 AnalysisError::DuplicateField {
@@ -87,7 +87,7 @@ impl Analyzer<'_> {
         let variant_iid = self.idents.insert(variant_span);
         let variant_key = SymbolKey::new(self.scope, variant_iid);
 
-        if let Some(variant_sid) = self.symbols.get_sid(variant_key) {
+        if let Some(variant_sid) = self.symbols.get(variant_key) {
             let declared_span = self.symbols.refer(variant_sid).span.into();
             self.errors.push(
                 AnalysisError::DuplicateVariant {

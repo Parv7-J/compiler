@@ -104,9 +104,6 @@ impl Analyzer<'_> {
         self.declarations.db.iter_mut().for_each(|ent| {
             ent.current_entry = 0;
         });
-        self.symbols.db.iter_mut().for_each(|ent| {
-            ent.current_entry = 0;
-        });
         self.declarations.unknown.values_mut().for_each(|ent| {
             ent.current_entry = 0;
         });
