@@ -111,15 +111,18 @@
 //should we allow implicit conversions???
 
 use crate::{
-    analysis::{analyzer::Analyzer, store::SymbolKey},
-    parser::ast::{Expr, IdentTy, SpannedIdent, Stmt},
+    analysis::{
+        analyzer::Analyzer,
+        store::{IdentId, SymbolId, SymbolKey},
+    },
+    parser::ast::{Atom, Expr, IdentTy, SpannedIdent, Stmt},
 };
 
 #[allow(unused_variables)]
 impl Analyzer<'_> {
-    pub fn regitser_stmt(&mut self, stmt: &Stmt) {
+    pub fn register_stmt(&mut self, stmt: &Stmt) {
         match stmt {
-            Stmt::Declaration { ty, var, value } => todo!(),
+            Stmt::Declaration { ty, var, value } => self.register_declaration(ty, var, value),
             Stmt::Seed { return_value } => todo!(),
             Stmt::If {
                 ifs,
@@ -141,11 +144,66 @@ impl Analyzer<'_> {
     }
 
     fn register_declaration(&mut self, ty: &IdentTy, var: &SpannedIdent, value: &Expr) {
-        let symbol_type = self.symbol_type(ty);
+        let var_type = self.symbol_type(ty);
         let var_span = var.0;
         let var_iid = self.idents.insert(var_span);
         let var_key = SymbolKey::new(self.scope, var_iid);
         let var_sid = self.symbols.insert(var_key, var_span);
         let var_info = self.symbols.get_sinfo(var_sid);
+        println!("expr: {value:?}");
+        match value {
+            Expr::Atom(atom) => self.atom(atom),
+            Expr::Cons(spanned_operator, exprs) => todo!(),
+            Expr::Prefix { op, operand } => todo!(),
+            Expr::Infix { op, lhs, rhs } => todo!(),
+            Expr::List(expr_list) => todo!(),
+            Expr::Call {
+                function,
+                arguments,
+            } => todo!(),
+            Expr::Access { lhs, rhs } => todo!(),
+        }
+        //for each thing, we need value and type
+        //for strings,numbers, we just need the value, as the type is inferred
+        //for ident we need to check if we have a symbol in scope with that name , if yes we deliver
+        //that symbol, then let the caller decide if it is okay to operate on it, for ex foo * 5 is
+        //valid for us, but if foo is a function name, then its not
+    }
+
+    fn find_symbol(&self, iid: IdentId) -> Option<SymbolId> {
+        let mut scope = self.scope;
+        loop {
+            let key = SymbolKey::new(scope, iid);
+            match self.symbols.get_sid(key) {
+                Some(sid) => return Some(sid),
+                None => {
+                    let parent_scope = self.declarations.parent_scope(scope);
+                    if scope == parent_scope {
+                        break;
+                    }
+                    scope = parent_scope;
+                }
+            };
+        }
+        None
+    }
+
+    fn atom(&mut self, atom: &Atom) {
+        match atom {
+            Atom::String(span) => todo!(),
+            Atom::Number(span) => todo!(),
+            Atom::Boolean(spanned_boolean) => todo!(),
+            Atom::This(span) => todo!(),
+            Atom::Ident(spanned_ident) => {
+                //here we have an ident
+                let span = spanned_ident.0;
+                let iid = self.idents.insert(span);
+                //check if the thing has a symbol
+                let sid = self.find_symbol(iid).expect("suppose we find the symbol");
+                //we need to get the latest value
+                let symbol = self.symbols.sinfo(sid);
+                println!("symbolinfo: {symbol:?}");
+            }
+        }
     }
 }

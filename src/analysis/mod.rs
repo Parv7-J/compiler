@@ -2,8 +2,8 @@ use crate::parser::ast::*;
 use std::sync::Arc;
 
 mod analyzer;
-mod block;
 mod error;
+mod recurse;
 mod stmt;
 mod store;
 
@@ -11,12 +11,12 @@ use analyzer::*;
 use error::*;
 use store::*;
 
-pub struct AstAnalyzer<'a> {
+pub struct SemanticAnalysis<'a> {
     ast: Ast<'a>,
     analyzer: Analyzer<'a>,
 }
 
-impl<'a> AstAnalyzer<'a> {
+impl<'a> SemanticAnalysis<'a> {
     pub fn new(ast: Ast<'a>) -> Self {
         let input = ast.input;
         Self {
@@ -31,10 +31,10 @@ impl<'a> AstAnalyzer<'a> {
         }
     }
 
-    pub fn analyze(mut self) -> Analyzer<'a> {
+    pub fn analyze(mut self) -> (Ast<'a>, Analyzer<'a>) {
         let items = self.ast.items.iter().collect::<Vec<_>>();
-        self.analyzer.collect(items.as_ref());
-        self.analyzer.recurse(items.as_ref());
+        self.analyzer.collect(&items);
+        self.analyzer.recurse(&items);
 
         let source = Arc::new(miette::NamedSource::new(
             "language",
@@ -52,6 +52,6 @@ impl<'a> AstAnalyzer<'a> {
             );
         }
 
-        self.analyzer
+        (self.ast, self.analyzer)
     }
 }

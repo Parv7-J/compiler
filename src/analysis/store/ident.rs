@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::Deref};
+use std::collections::HashMap;
 
 use crate::Span;
 
@@ -6,14 +6,6 @@ use crate::Span;
 ///IdentId
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct IdentId(pub usize);
-
-impl Deref for IdentId {
-    type Target = usize;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct IdentStore<'a> {

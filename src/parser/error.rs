@@ -3,7 +3,7 @@ use std::fmt::Display;
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 
-use crate::lexer::token::TokenKind;
+use crate::lexer::token::{Operator, TokenKind};
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum ParseError {
@@ -31,6 +31,18 @@ pub enum ParseError {
         expected: Expected,
         found: Found,
         #[label("expected {expected}, got {found}")]
+        span: SourceSpan,
+    },
+    #[error("Invalid prefix operator")]
+    NotPrefix {
+        op: Operator,
+        #[label("{op} is not a prefix operator")]
+        span: SourceSpan,
+    },
+    #[error("Invalid infix operator")]
+    NotInfix {
+        op: Operator,
+        #[label("{op} is not an infix operator")]
         span: SourceSpan,
     },
 }

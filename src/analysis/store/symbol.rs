@@ -1,6 +1,5 @@
 use super::{DeclarationId, IdentId, ScopeId};
 use std::collections::{HashMap, hash_map::Entry};
-use std::ops::Deref;
 
 use crate::lexer::token::Span;
 use crate::parser::ast::ArrType;
@@ -16,40 +15,29 @@ pub struct SymbolStore {
     pub db: Vec<SymbolEntry>,
 }
 
-impl Deref for SymbolId {
-    type Target = usize;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SymbolKey {
-    parent_scope_id: ScopeId,
+    scope_id: ScopeId,
     ident_id: IdentId,
 }
 
 impl SymbolKey {
-    pub fn new(parent_scope_id: ScopeId, ident_id: IdentId) -> Self {
-        Self {
-            parent_scope_id,
-            ident_id,
-        }
+    pub fn new(scope_id: ScopeId, ident_id: IdentId) -> Self {
+        Self { scope_id, ident_id }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct SymbolEntry {
-    pub at: usize,
-    pub info: Vec<SymbolInfo>,
+    pub current_entry: usize,
+    pub entries: Vec<SymbolInfo>,
 }
 
 impl SymbolEntry {
-    pub fn new(info: SymbolInfo) -> Self {
+    pub fn new(entry: SymbolInfo) -> Self {
         Self {
-            at: 0,
-            info: vec![info],
+            current_entry: 0,
+            entries: vec![entry],
         }
     }
 }
@@ -94,7 +82,7 @@ impl SymbolStore {
     pub fn insert(&mut self, key: SymbolKey, span: Span) -> SymbolId {
         match self.ids.entry(key) {
             Entry::Occupied(occupied_entry) => {
-                self.db[occupied_entry.get().0].info.push(SymbolInfo {
+                self.db[occupied_entry.get().0].entries.push(SymbolInfo {
                     span,
                     ty: SymbolType::Pending,
                 });
@@ -114,13 +102,20 @@ impl SymbolStore {
 
     ///should always be called when it is ensured that the id corresponds to an entry
     ///panics if symbol_id is not in the store
-    pub fn first_declaration(&self, id: SymbolId) -> &SymbolInfo {
-        &self.db[id.0].info[0]
+    pub fn refer(&self, id: SymbolId) -> &SymbolInfo {
+        &self.db[id.0].entries[0]
     }
 
     ///gets the SymbolId from SymbolKey, or else None
     pub fn get_sid(&self, key: SymbolKey) -> Option<SymbolId> {
         self.ids.get(&key).copied()
+    }
+
+    pub fn sinfo(&self, id: SymbolId) -> &SymbolInfo {
+        let entry = &self.db[id.0];
+        //we will always be current_entry 'current_entry' = 1
+        //the entire logic is very messy
+        &entry.entries[entry.current_entry]
     }
 
     ///should always be called when it is ensured that the id corresponds to an entry
@@ -131,9 +126,9 @@ impl SymbolStore {
     ///panics if there is no entry related to the symbol id
     pub fn get_sinfo(&mut self, id: SymbolId) -> &mut SymbolInfo {
         let entry = &mut self.db[id.0];
-        //SAFETY: starts at 0, and thus always starts at 1, and 1 - 1 = 0
+        //SAFETY: starts current_entry 0, and thus always starts current_entry 1, and 1 - 1 = 0
         //OVERFLOW: can overflow, if we change the type for memory efficiency
-        entry.at += 1;
-        &mut entry.info[entry.at - 1]
+        entry.current_entry += 1;
+        &mut entry.entries[entry.current_entry - 1]
     }
 }

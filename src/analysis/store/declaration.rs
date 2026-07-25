@@ -1,162 +1,28 @@
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use std::ops::Deref;
 
 use super::SymbolType;
 use super::scope::ScopeStore;
 use super::{IdentId, ScopeId};
 use crate::analysis::SymbolId;
+use crate::analysis::store::Key;
 use crate::lexer::token::Span;
 
 ///uniquely identifies a declaration, in any scope
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DeclarationId(pub usize);
 
-impl Deref for DeclarationId {
-    type Target = usize;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct DeclarationStore {
-    pub scope_store: ScopeStore,
-    pub ids: HashMap<DeclarationKey, DeclarationId>,
-    pub db: Vec<DeclarationEntry>,
-    pub unknown: HashMap<DeclarationKey, UnknownEntry>,
-}
-
-impl DeclarationStore {
-    pub fn new() -> Self {
-        Self {
-            scope_store: ScopeStore::new(),
-            ids: HashMap::new(),
-            db: Vec::new(),
-            unknown: HashMap::new(),
-        }
-    }
-
-    pub fn insert(
-        &mut self,
-        key: DeclarationKey,
-        span: Span,
-        ty: DeclarationType,
-    ) -> DeclarationId {
-        let new_scope = self.new_scope(key.scope_id);
-        let d_info = DeclarationInfo {
-            scope_id: new_scope,
-            span,
-            ty,
-        };
-        match self.ids.entry(key) {
-            Entry::Occupied(occupied_entry) => {
-                let did = *occupied_entry.get();
-                self.db[did.0].info.push(d_info);
-                did
-            }
-            Entry::Vacant(vacant_entry) => {
-                let did = DeclarationId(self.db.len());
-                vacant_entry.insert(did);
-                self.db.push(DeclarationEntry::new(d_info));
-                did
-            }
-        }
-    }
-
-    pub fn insert_unknown(&mut self, key: DeclarationKey, span: Span, ty: UnknownType) {
-        //WRONG
-        let new_scope = self.new_scope(key.scope_id);
-        let u_info = UnknownInfo {
-            scope_id: new_scope,
-            span,
-            ty,
-        };
-        match self.unknown.entry(key) {
-            Entry::Occupied(mut occupied_entry) => {
-                occupied_entry.get_mut().info.push(u_info);
-            }
-            Entry::Vacant(vacant_entry) => {
-                vacant_entry.insert(UnknownEntry::new(u_info));
-            }
-        }
-    }
-
-    ///should always be called when it is ensured that the id corresponds to an entry
-    ///panics if declaration_id is not in the store
-    pub fn first_declaration(&self, id: DeclarationId) -> &DeclarationInfo {
-        &self.db[id.0].info[0]
-    }
-
-    ///should always be called when it is ensured that the id corresponds to an entry
-    ///panics if declaration_id is not in the store
-    pub fn first_declaration_mut(&mut self, id: DeclarationId) -> &mut DeclarationInfo {
-        &mut self.db[id.0].info[0]
-    }
-
-    ///gets the DeclarationId from DeclarationKey, or else None
-    pub fn get_did(&self, key: DeclarationKey) -> Option<DeclarationId> {
-        self.ids.get(&key).copied()
-    }
-
-    ///should always be called when it is ensured that the id corresponds to an entry
-    ///should only be called once for every redeclaration (i.e. that have the same declaration id
-    ///but are diff declarations)
-    ///updates the internal state so that the next call to this would report the next declaration ->
-    ///in order to initialize one by one
-    ///panics if there is no entry related to the declaration id
-    pub fn get_dinfo(&mut self, id: DeclarationId) -> &mut DeclarationInfo {
-        let entry = &mut self.db[id.0];
-        //SAFETY: starts at 0, and thus always starts at 1, and 1 - 1 = 0
-        //OVERFLOW: can overflow, if we change the type for memory efficiency
-        entry.at += 1;
-        &mut entry.info[entry.at - 1]
-    }
-
-    ///gets the declaration info of the declaration that is going to be instantiated
-    ///panics if 'did' doesnt correspond to a valid entry
-    pub fn dinfo(&self, id: DeclarationId) -> &DeclarationInfo {
-        let entry = &self.db[id.0];
-        &entry.info[entry.at]
-    }
-
-    ///calls scope_store.new_scope
-    pub fn new_scope(&mut self, parent: ScopeId) -> ScopeId {
-        self.scope_store.new_scope(parent)
-    }
-
-    ///calls scope_store.parent_scope
-    pub fn parent_scope(&self, scope: ScopeId) -> ScopeId {
-        self.scope_store.parent_scope(scope)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct DeclarationKey {
-    scope_id: ScopeId,
-    ident_id: IdentId,
-}
-
-impl DeclarationKey {
-    ///'scope_id': scope to look in
-    ///'ident_id': identifier to look for
-    pub fn new(scope_id: ScopeId, ident_id: IdentId) -> Self {
-        Self { scope_id, ident_id }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct DeclarationEntry {
-    pub at: usize,
-    pub info: Vec<DeclarationInfo>,
+    pub current_entry: usize,
+    pub entries: Vec<DeclarationInfo>,
 }
 
 impl DeclarationEntry {
-    pub fn new(info: DeclarationInfo) -> Self {
+    pub fn new(entry: DeclarationInfo) -> Self {
         Self {
-            at: 0,
-            info: vec![info],
+            current_entry: 0,
+            entries: vec![entry],
         }
     }
 }
@@ -172,16 +38,147 @@ pub struct DeclarationInfo {
 }
 
 #[derive(Debug, Clone)]
+pub struct DeclarationStore {
+    pub scope_store: ScopeStore,
+    pub ids: HashMap<Key, DeclarationId>,
+    pub db: Vec<DeclarationEntry>,
+    pub unknown: HashMap<Key, UnknownEntry>,
+}
+
+impl DeclarationStore {
+    pub fn new() -> Self {
+        Self {
+            scope_store: ScopeStore::new(),
+            ids: HashMap::new(),
+            db: Vec::new(),
+            unknown: HashMap::new(),
+        }
+    }
+
+    pub fn insert(&mut self, key: Key, span: Span, ty: DeclarationType) -> DeclarationId {
+        let new_scope = self.new_scope(key.scid);
+        let d_info = DeclarationInfo {
+            scope_id: new_scope,
+            span,
+            ty,
+        };
+        match self.ids.entry(key) {
+            Entry::Occupied(occupied_entry) => {
+                let did = *occupied_entry.get();
+                self.db[did.0].entries.push(d_info);
+                did
+            }
+            Entry::Vacant(vacant_entry) => {
+                let did = DeclarationId(self.db.len());
+                vacant_entry.insert(did);
+                self.db.push(DeclarationEntry::new(d_info));
+                did
+            }
+        }
+    }
+
+    ///DeclarationKey -> DeclarationId
+    pub fn get(&self, key: Key) -> Option<DeclarationId> {
+        self.ids.get(&key).copied()
+    }
+
+    ///DeclarationId -> Current Declaration's Scope
+    pub fn scope_from_id(&self, did: DeclarationId) -> ScopeId {
+        let dentry = &self.db[did.0];
+        dentry.entries[dentry.current_entry].scope_id
+    }
+
+    ///should always be called when it is ensured that the id corresponds to an entry
+    ///should only be called once for every redeclaration (i.e. that have the same declaration id
+    ///but are diff declarations)
+    ///updates the internal state so that the next call to this would report the next declaration ->
+    ///in order to initialize one by one
+    ///panics if there is no entry related to the declaration id
+    pub fn initialize<T>(&mut self, did: DeclarationId, initializer: T)
+    where
+        T: FnOnce(&mut DeclarationInfo),
+    {
+        let dentry = &mut self.db[did.0];
+        let dinfo = &mut dentry.entries[dentry.current_entry];
+        initializer(dinfo);
+        dentry.current_entry += 1;
+    }
+
+    ///finds declarations, searching from the 'scope' defined in 'key', and goes up the parent
+    ///chain, stopping when either the declaration is found, or we reach the outermost scope
+    pub fn find(&self, starting_scope: ScopeId, iid: IdentId) -> Option<DeclarationId> {
+        let mut key = Key::new(starting_scope, iid);
+        loop {
+            let mut scope = key.scid;
+            match self.get(key) {
+                Some(did) => return Some(did),
+                None => {
+                    let parent_scope = self.parent_scope(scope);
+                    if scope == parent_scope {
+                        break;
+                    }
+                    scope = parent_scope;
+                }
+            };
+            key = Key::new(scope, key.iid);
+        }
+        None
+    }
+
+    ///should always be called when it is ensured that the id corresponds to an entry
+    ///panics if declaration_id is not in the store
+    pub fn refer(&self, id: DeclarationId) -> &DeclarationInfo {
+        &self.db[id.0].entries[0]
+    }
+
+    ///should always be called when it is ensured that the id corresponds to an entry
+    ///panics if declaration_id is not in the store
+    pub fn refer_mut(&mut self, id: DeclarationId) -> &mut DeclarationInfo {
+        &mut self.db[id.0].entries[0]
+    }
+
+    ///calls scope_store.new_scope
+    pub fn new_scope(&mut self, parent: ScopeId) -> ScopeId {
+        self.scope_store.new_scope(parent)
+    }
+
+    ///calls scope_store.parent_scope
+    pub fn parent_scope(&self, scope: ScopeId) -> ScopeId {
+        self.scope_store.parent_scope(scope)
+    }
+}
+
+impl DeclarationStore {
+    pub fn insert_unknown(&mut self, key: Key, span: Span, ty: UnknownType) {
+        //WRONG
+        let new_scope = self.new_scope(key.scid);
+        let u_info = UnknownInfo {
+            scope_id: new_scope,
+            span,
+            ty,
+        };
+        match self.unknown.entry(key) {
+            Entry::Occupied(mut occupied_entry) => {
+                occupied_entry.get_mut().entries.push(u_info);
+            }
+            Entry::Vacant(vacant_entry) => {
+                vacant_entry.insert(UnknownEntry::new(u_info));
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct UnknownEntry {
-    pub at: usize,
-    pub info: Vec<UnknownInfo>,
+    pub current_entry: usize,
+    pub entries: Vec<UnknownInfo>,
 }
 
 impl UnknownEntry {
-    pub fn new(info: UnknownInfo) -> Self {
+    pub fn new(entry: UnknownInfo) -> Self {
         Self {
-            at: 0,
-            info: vec![info],
+            current_entry: 0,
+            entries: vec![entry],
         }
     }
 }
@@ -206,56 +203,61 @@ pub enum UnknownType {
 pub enum DeclarationType {
     Packing(Packing),
     Aor(Aor),
-    Procedure(Option<Procedure>),
-    Api(Option<Api>),
+    Procedure(Procedure),
+    Api(Api),
 }
 
 impl DeclarationType {
     pub fn packing() -> Self {
         Self::Packing(Packing {
-            fields: None,
-            methods: None,
-            requires: None,
+            fields: HashMap::new(),
+            methods: Vec::new(),
+            requires: HashMap::new(),
         })
     }
 
     pub fn aor() -> Self {
         Self::Aor(Aor {
-            variants: None,
-            methods: None,
-            requires: None,
+            variants: HashMap::new(),
+            methods: Vec::new(),
+            requires: HashMap::new(),
+        })
+    }
+    pub fn api() -> Self {
+        Self::Api(Api {
+            supers: Vec::new(),
+            methods: HashMap::new(),
         })
     }
 
-    pub fn procedure(arguments: HashMap<IdentId, SymbolId>, return_ty: Option<SymbolType>) -> Self {
-        Self::Procedure(Some(Procedure {
-            arguments,
-            return_ty,
-        }))
-    }
-
-    pub fn api(supers: Vec<DeclarationId>, methods: HashMap<IdentId, DeclarationId>) -> Self {
-        Self::Api(Some(Api { supers, methods }))
+    pub fn procedure() -> Self {
+        Self::Procedure(Procedure {
+            arguments: HashMap::new(),
+            return_ty: None,
+        })
     }
 }
 
 #[derive(Debug, Clone)]
+pub struct ScopedMethods {
+    pub scope: ScopeId,
+    pub methods: HashMap<IdentId, DeclarationId>,
+}
+
+#[derive(Debug, Clone)]
 pub struct Packing {
-    pub fields: Option<HashMap<IdentId, SymbolId>>,
-    pub methods: Option<Vec<(ScopeId, HashMap<IdentId, DeclarationId>)>>,
-    pub requires: Option<HashMap<DeclarationId, Vec<(ScopeId, HashMap<IdentId, DeclarationId>)>>>,
+    pub fields: HashMap<IdentId, SymbolId>,
+    pub methods: Vec<ScopedMethods>,
+    pub requires: HashMap<DeclarationId, Vec<ScopedMethods>>,
 }
 
 impl Packing {
     pub fn set_fields(&mut self, fields: HashMap<IdentId, SymbolId>) {
-        self.fields = Some(fields);
+        self.fields = fields;
     }
 
     pub fn add_methods(&mut self, methods: HashMap<IdentId, DeclarationId>, scope: ScopeId) {
-        match self.methods {
-            Some(ref mut v) => v.push((scope, methods)),
-            None => self.methods = Some(vec![(scope, methods)]),
-        }
+        self.methods.push(ScopedMethods { scope, methods });
     }
 
     pub fn add_requires(
@@ -264,19 +266,18 @@ impl Packing {
         requires: HashMap<IdentId, DeclarationId>,
         scope: ScopeId,
     ) {
-        match self.requires {
-            Some(ref mut v) => match v.entry(api) {
-                Entry::Occupied(mut occupied_entry) => {
-                    occupied_entry.get_mut().push((scope, requires));
-                }
-                Entry::Vacant(vacant_entry) => {
-                    vacant_entry.insert(vec![(scope, requires)]);
-                }
-            },
-            None => {
-                let mut map = HashMap::new();
-                map.insert(api, vec![(scope, requires)]);
-                self.requires = Some(map)
+        match self.requires.entry(api) {
+            Entry::Occupied(mut occupied_entry) => {
+                occupied_entry.get_mut().push(ScopedMethods {
+                    scope,
+                    methods: requires,
+                });
+            }
+            Entry::Vacant(vacant_entry) => {
+                vacant_entry.insert(vec![ScopedMethods {
+                    scope,
+                    methods: requires,
+                }]);
             }
         }
     }
@@ -284,21 +285,18 @@ impl Packing {
 
 #[derive(Debug, Clone)]
 pub struct Aor {
-    pub variants: Option<HashMap<IdentId, SymbolId>>,
-    pub methods: Option<Vec<(ScopeId, HashMap<IdentId, DeclarationId>)>>,
-    pub requires: Option<HashMap<DeclarationId, Vec<(ScopeId, HashMap<IdentId, DeclarationId>)>>>,
+    pub variants: HashMap<IdentId, SymbolId>,
+    pub methods: Vec<ScopedMethods>,
+    pub requires: HashMap<DeclarationId, Vec<ScopedMethods>>,
 }
 
 impl Aor {
     pub fn set_variants(&mut self, variants: HashMap<IdentId, SymbolId>) {
-        self.variants = Some(variants);
+        self.variants = variants;
     }
 
     pub fn add_methods(&mut self, methods: HashMap<IdentId, DeclarationId>, scope: ScopeId) {
-        match self.methods {
-            Some(ref mut v) => v.push((scope, methods)),
-            None => self.methods = Some(vec![(scope, methods)]),
-        }
+        self.methods.push(ScopedMethods { scope, methods });
     }
 
     pub fn add_requires(
@@ -307,19 +305,18 @@ impl Aor {
         requires: HashMap<IdentId, DeclarationId>,
         scope: ScopeId,
     ) {
-        match self.requires {
-            Some(ref mut v) => match v.entry(api) {
-                Entry::Occupied(mut occupied_entry) => {
-                    occupied_entry.get_mut().push((scope, requires));
-                }
-                Entry::Vacant(vacant_entry) => {
-                    vacant_entry.insert(vec![(scope, requires)]);
-                }
-            },
-            None => {
-                let mut map = HashMap::new();
-                map.insert(api, vec![(scope, requires)]);
-                self.requires = Some(map)
+        match self.requires.entry(api) {
+            Entry::Occupied(mut occupied_entry) => {
+                occupied_entry.get_mut().push(ScopedMethods {
+                    scope,
+                    methods: requires,
+                });
+            }
+            Entry::Vacant(vacant_entry) => {
+                vacant_entry.insert(vec![ScopedMethods {
+                    scope,
+                    methods: requires,
+                }]);
             }
         }
     }
@@ -329,6 +326,25 @@ impl Aor {
 pub struct Api {
     pub supers: Vec<DeclarationId>,
     pub methods: HashMap<IdentId, DeclarationId>,
+}
+
+impl Api {
+    pub fn set_supers(&mut self, supers: Vec<DeclarationId>) {
+        self.supers = supers;
+    }
+
+    pub fn set_methods(&mut self, methods: HashMap<IdentId, DeclarationId>) {
+        self.methods = methods;
+    }
+}
+impl Procedure {
+    pub fn set_arguments(&mut self, arguments: HashMap<IdentId, SymbolId>) {
+        self.arguments = arguments;
+    }
+
+    pub fn set_return_ty(&mut self, return_ty: Option<SymbolType>) {
+        self.return_ty = return_ty;
+    }
 }
 
 #[derive(Debug, Clone)]

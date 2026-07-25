@@ -33,7 +33,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse(mut self, fname: &str) -> Ast<'a> {
         let mut items = Vec::new();
-        //NOTE: can we get away without cloning? as we are printing the errors right away
+        //TODO: can we get away without to_string()? as we are printing the errors right away
         let source = Arc::new(miette::NamedSource::new(
             fname,
             self.lexer.input.to_string(),

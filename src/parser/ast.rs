@@ -45,10 +45,28 @@ pub enum BlockItem {
 pub enum Expr {
     Atom(Atom),
     Cons(SpannedOperator, Vec<Expr>),
-    List(Vec<Expr>),
-    Call(Vec<Expr>),
-    Access(Vec<Expr>),
+    Prefix {
+        op: SpannedOperator,
+        operand: Box<Expr>,
+    },
+    Infix {
+        op: SpannedOperator,
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
+    },
+    List(ExprList),
+    Call {
+        function: Box<Expr>,
+        arguments: ExprList,
+    },
+    Access {
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
+    },
 }
+
+#[derive(Debug, Clone)]
+pub struct ExprList(pub Vec<Expr>);
 
 #[derive(Debug, Clone)]
 pub struct SpannedOperator {

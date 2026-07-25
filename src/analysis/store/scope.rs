@@ -1,16 +1,6 @@
-use std::ops::Deref;
-
 ///each level of depth has the same scope id
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ScopeId(pub usize);
-
-impl Deref for ScopeId {
-    type Target = usize;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct ScopeStore {

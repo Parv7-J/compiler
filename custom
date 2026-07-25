@@ -1,12 +1,4 @@
-proc foo[]{ 
-    proc bar[]{ 
-        proc baz[packed(Packed)]{ 
-
-        }
-    }
+proc foo[a(i32)]{ 
+    i32 b = a;
 }
 
-packing Packed { 
-    fields(arr[string]),
-    values(arr[usize])
-}
