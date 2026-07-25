@@ -66,6 +66,7 @@ impl DeclarationStore {
     }
 
     pub fn insert_unknown(&mut self, key: DeclarationKey, span: Span, ty: UnknownType) {
+        //WRONG
         let new_scope = self.new_scope(key.scope_id);
         let u_info = UnknownInfo {
             scope_id: new_scope,
@@ -241,8 +242,8 @@ impl DeclarationType {
 #[derive(Debug, Clone)]
 pub struct Packing {
     pub fields: Option<HashMap<IdentId, SymbolId>>,
-    pub methods: Option<Vec<HashMap<IdentId, DeclarationId>>>,
-    pub requires: Option<HashMap<DeclarationId, Vec<HashMap<IdentId, DeclarationId>>>>,
+    pub methods: Option<Vec<(ScopeId, HashMap<IdentId, DeclarationId>)>>,
+    pub requires: Option<HashMap<DeclarationId, Vec<(ScopeId, HashMap<IdentId, DeclarationId>)>>>,
 }
 
 impl Packing {
@@ -250,26 +251,31 @@ impl Packing {
         self.fields = Some(fields);
     }
 
-    pub fn add_methods(&mut self, methods: HashMap<IdentId, DeclarationId>) {
+    pub fn add_methods(&mut self, methods: HashMap<IdentId, DeclarationId>, scope: ScopeId) {
         match self.methods {
-            Some(ref mut v) => v.push(methods),
-            None => self.methods = Some(vec![methods]),
+            Some(ref mut v) => v.push((scope, methods)),
+            None => self.methods = Some(vec![(scope, methods)]),
         }
     }
 
-    pub fn add_requires(&mut self, api: DeclarationId, requires: HashMap<IdentId, DeclarationId>) {
+    pub fn add_requires(
+        &mut self,
+        api: DeclarationId,
+        requires: HashMap<IdentId, DeclarationId>,
+        scope: ScopeId,
+    ) {
         match self.requires {
             Some(ref mut v) => match v.entry(api) {
                 Entry::Occupied(mut occupied_entry) => {
-                    occupied_entry.get_mut().push(requires);
+                    occupied_entry.get_mut().push((scope, requires));
                 }
                 Entry::Vacant(vacant_entry) => {
-                    vacant_entry.insert(vec![requires]);
+                    vacant_entry.insert(vec![(scope, requires)]);
                 }
             },
             None => {
                 let mut map = HashMap::new();
-                map.insert(api, vec![requires]);
+                map.insert(api, vec![(scope, requires)]);
                 self.requires = Some(map)
             }
         }
@@ -279,8 +285,8 @@ impl Packing {
 #[derive(Debug, Clone)]
 pub struct Aor {
     pub variants: Option<HashMap<IdentId, SymbolId>>,
-    pub methods: Option<Vec<HashMap<IdentId, DeclarationId>>>,
-    pub requires: Option<HashMap<DeclarationId, Vec<HashMap<IdentId, DeclarationId>>>>,
+    pub methods: Option<Vec<(ScopeId, HashMap<IdentId, DeclarationId>)>>,
+    pub requires: Option<HashMap<DeclarationId, Vec<(ScopeId, HashMap<IdentId, DeclarationId>)>>>,
 }
 
 impl Aor {
@@ -288,26 +294,31 @@ impl Aor {
         self.variants = Some(variants);
     }
 
-    pub fn add_methods(&mut self, methods: HashMap<IdentId, DeclarationId>) {
+    pub fn add_methods(&mut self, methods: HashMap<IdentId, DeclarationId>, scope: ScopeId) {
         match self.methods {
-            Some(ref mut v) => v.push(methods),
-            None => self.methods = Some(vec![methods]),
+            Some(ref mut v) => v.push((scope, methods)),
+            None => self.methods = Some(vec![(scope, methods)]),
         }
     }
 
-    pub fn add_requires(&mut self, api: DeclarationId, requires: HashMap<IdentId, DeclarationId>) {
+    pub fn add_requires(
+        &mut self,
+        api: DeclarationId,
+        requires: HashMap<IdentId, DeclarationId>,
+        scope: ScopeId,
+    ) {
         match self.requires {
             Some(ref mut v) => match v.entry(api) {
                 Entry::Occupied(mut occupied_entry) => {
-                    occupied_entry.get_mut().push(requires);
+                    occupied_entry.get_mut().push((scope, requires));
                 }
                 Entry::Vacant(vacant_entry) => {
-                    vacant_entry.insert(vec![requires]);
+                    vacant_entry.insert(vec![(scope, requires)]);
                 }
             },
             None => {
                 let mut map = HashMap::new();
-                map.insert(api, vec![requires]);
+                map.insert(api, vec![(scope, requires)]);
                 self.requires = Some(map)
             }
         }

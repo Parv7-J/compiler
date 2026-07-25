@@ -61,12 +61,12 @@ impl Analyzer<'_> {
         if let Some(info) = type_info {
             match &mut info.ty {
                 DeclarationType::Packing(packing) => {
-                    packing.add_methods(procedures);
+                    packing.add_methods(procedures, self.scope);
                     self.exit_scope();
                     return;
                 }
                 DeclarationType::Aor(aor) => {
-                    aor.add_methods(procedures);
+                    aor.add_methods(procedures, self.scope);
                     self.exit_scope();
                     return;
                 }
@@ -323,7 +323,7 @@ impl Analyzer<'_> {
         (variant_iid, variant_sid)
     }
 
-    fn symbol_type(&mut self, ty: &IdentTy) -> SymbolType {
+    pub fn symbol_type(&mut self, ty: &IdentTy) -> SymbolType {
         match ty {
             IdentTy::Type(spanned_ty) => SymbolType::BuiltInType(*spanned_ty),
             IdentTy::Ident(spanned_ident) => {

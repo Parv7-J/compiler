@@ -1,3 +1,7 @@
+//TODO: fix methods, requires structures inside the DeclarationStore, as it is right now a pain to
+//find them
+//TODO: add other procedures collection, which are inside methods and requires, but can only be done
+//after completing the previous todo
 use crate::{
     analysis::{analyzer::Analyzer, store::declaration::DeclarationInfo},
     parser::ast::Procedure,
@@ -82,8 +86,8 @@ impl Analyzer<'_> {
                 Item::Procedure(procedure) => {
                     self.get_procedure(procedure);
                 }
-                Item::Methods(methods) => {
-                    self.get_methods(methods);
+                Item::Methods(_methods) => {
+                    // self.get_methods(methods);
                 }
                 // Item::Api(_api) => todo!(),
                 // Item::Require(_require) => todo!(),
@@ -123,14 +127,28 @@ impl Analyzer<'_> {
         self.exit_scope();
     }
 
-    pub fn get_methods(&mut self, methods: &Methods) {
-        let ident_span = methods.ident.0;
-        let methods_did = self.did(ident_span);
-        let methods_scope = self.dinfo_at(methods_did).scope_id;
-        self.enter_scope(methods_scope);
-        for procedure in &methods.procedures {
-            self.get_procedure(procedure);
-        }
-        self.exit_scope();
-    }
+    // pub fn get_methods(&mut self, methods: &Methods) {
+    //     //we do need the methods scope
+    //     let type_span = methods.ident.0;
+    //     let type_iid = self.idents.contains(type_span).unwrap();
+    //     let type_key = DeclarationKey::new(self.scope, type_iid);
+    //     match self.declarations.get_did(type_key) {
+    //         Some(did) => {
+    //             let first = self.declarations.first_declaration(did);
+    //             let methods_scope = match first.ty {
+    //                 DeclarationType::Packing(packing) => packing.methods.0,
+    //                 DeclarationType::Aor(aor) => aor.methods.0,
+    //                 _ => unreachable("methods for types only"),
+    //             };
+    //         }
+    //         None => todo!(),
+    //     }
+    //     for procedure in &methods.procedures {
+    //         self.get_procedure(procedure);
+    //     }
+    //     //as the last exit will result in the exit to the methods scope
+    //     if !methods.procedures.is_empty() {
+    //         self.exit_scope();
+    //     }
+    // }
 }

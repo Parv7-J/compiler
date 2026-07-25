@@ -4,6 +4,7 @@ use std::sync::Arc;
 mod analyzer;
 mod block;
 mod error;
+mod stmt;
 mod store;
 
 use analyzer::*;

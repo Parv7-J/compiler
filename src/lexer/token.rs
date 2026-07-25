@@ -110,18 +110,19 @@ pub enum BitWidth {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Operator {
-    BitwiseAnd,
-    BitwiseOr,
-    Not,
-    Assign,
-    Plus,
-    Minus,
-    Star,
-    ForwardSlash,
-    Dot,
-    Comparision(ComparisionOperator),
-    Logical(LogicalOperator),
-    CompoundAssign(CompoundAssignOperator),
+    BitwiseAnd,                       //lhs rhs should be numbers
+    BitwiseOr,                        //lhs rhs should be numbers
+    Not,                              //TODO: divide to logical not and bitwise not
+    Assign,                           //rhs should be assignable to lhs
+    Plus,  //lhs and rhs are addable like string string, number number, but not string number
+    Minus, //same
+    Star,  //if ptr, then can be dereferenced, else same
+    ForwardSlash, //same
+    Dot,   //fields or methods
+    Comparision(ComparisionOperator), //can be compared, like string string
+    Logical(LogicalOperator), //operands should be evaluated to boolean
+    CompoundAssign(CompoundAssignOperator), //in place modification of that type, with the
+           //assignable value
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
