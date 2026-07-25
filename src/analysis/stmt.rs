@@ -113,7 +113,7 @@
 use crate::{
     analysis::{
         analyzer::Analyzer,
-        store::{IdentId, SymbolId, SymbolKey},
+        store::{IdentId, SymbolId, SymbolKey, SymbolType},
     },
     parser::ast::{Atom, Expr, IdentTy, SpannedIdent, Stmt},
 };
@@ -148,8 +148,8 @@ impl Analyzer<'_> {
         let var_span = var.0;
         let var_iid = self.idents.insert(var_span);
         let var_key = SymbolKey::new(self.scope, var_iid);
-        let var_sid = self.symbols.insert(var_key, var_span);
-        let var_info = self.symbols.get_sinfo(var_sid);
+        let var_sid = self.symbols.insert(var_key, var_span, SymbolType::Pending);
+
         println!("expr: {value:?}");
         match value {
             Expr::Atom(atom) => self.atom(atom),

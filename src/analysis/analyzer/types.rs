@@ -37,21 +37,12 @@ impl Analyzer<'_> {
 
         let mut variants = HashMap::new();
         for variant in &aor.variants {
-            match variant {
-                Variant::Field(field) => {
-                    let (iid, sid) = self.register_variant(field.ident.0);
-                    let s_ty = self.symbol_type(&field.ty);
-                    let s_info = self.symbols.get_sinfo(sid);
-                    s_info.ty = s_ty;
-                    variants.insert(iid, sid);
-                }
-                Variant::SpannedIdent(ident) => {
-                    let (iid, sid) = self.register_variant(ident.0);
-                    let s_info = self.symbols.get_sinfo(sid);
-                    s_info.ty = SymbolType::Variant;
-                    variants.insert(iid, sid);
-                }
-            }
+            let (span, symbol_type) = match variant {
+                Variant::Field(field) => (field.ident.0, self.symbol_type(&field.ty)),
+                Variant::SpannedIdent(ident) => (ident.0, SymbolType::Variant),
+            };
+            let (iid, sid) = self.register_variant(span, symbol_type);
+            variants.insert(iid, sid);
         }
 
         self.declarations.initialize(aor_did, |info| {
@@ -82,15 +73,17 @@ impl Analyzer<'_> {
             );
         }
 
-        let field_sid = self.symbols.insert(field_key, field_span);
         let field_type = self.symbol_type(&field.ty);
-        let field_info = self.symbols.get_sinfo(field_sid);
-        field_info.ty = field_type;
+        let field_sid = self.symbols.insert(field_key, field_span, field_type);
 
         (field_iid, field_sid)
     }
 
-    pub fn register_variant(&mut self, variant_span: Span) -> (IdentId, SymbolId) {
+    pub fn register_variant(
+        &mut self,
+        variant_span: Span,
+        symbol_type: SymbolType,
+    ) -> (IdentId, SymbolId) {
         let variant_iid = self.idents.insert(variant_span);
         let variant_key = SymbolKey::new(self.scope, variant_iid);
 
@@ -105,7 +98,7 @@ impl Analyzer<'_> {
             );
         }
 
-        let variant_sid = self.symbols.insert(variant_key, variant_span);
+        let variant_sid = self.symbols.insert(variant_key, variant_span, symbol_type);
         (variant_iid, variant_sid)
     }
 }

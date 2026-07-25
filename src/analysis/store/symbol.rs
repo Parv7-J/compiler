@@ -79,12 +79,12 @@ impl SymbolStore {
     ///inserts the IdentId inside the store, returning it or
     ///panics because we have two duplicate interns, and thus two duplicate named ids, even though
     ///they may be of different type
-    pub fn insert(&mut self, key: SymbolKey, span: Span) -> SymbolId {
+    pub fn insert(&mut self, key: SymbolKey, span: Span, symbol_type: SymbolType) -> SymbolId {
         match self.ids.entry(key) {
             Entry::Occupied(occupied_entry) => {
                 self.db[occupied_entry.get().0].entries.push(SymbolInfo {
                     span,
-                    ty: SymbolType::Pending,
+                    ty: symbol_type,
                 });
                 *occupied_entry.get()
             }
@@ -93,7 +93,7 @@ impl SymbolStore {
                 vacant_entry.insert(idx);
                 self.db.push(SymbolEntry::new(SymbolInfo {
                     span,
-                    ty: SymbolType::Pending,
+                    ty: symbol_type,
                 }));
                 idx
             }
