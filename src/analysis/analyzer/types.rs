@@ -4,11 +4,12 @@ use super::*;
 use crate::{analysis::store::declaration::DeclarationType, lexer::token::Span};
 
 impl Analyzer<'_> {
-    pub fn register_packing(&mut self, packing: &Packing) {
+    pub fn initialize_packing(&mut self, packing: &Packing) {
         let packing_iid = self.idents.insert(packing.ident.0);
         let packing_key = Key::new(self.scope, packing_iid);
         let packing_did = self.declarations.get(packing_key).unwrap();
         let packing_scope = self.declarations.scope_from_id(packing_did);
+
         self.enter_scope(packing_scope);
 
         let mut fields = HashMap::new();
@@ -27,7 +28,7 @@ impl Analyzer<'_> {
         self.exit_scope();
     }
 
-    pub fn register_aor(&mut self, aor: &Aor) {
+    pub fn initialize_aor(&mut self, aor: &Aor) {
         let aor_iid = self.idents.insert(aor.ident.0);
         let aor_key = Key::new(self.scope, aor_iid);
         let aor_did = self.declarations.get(aor_key).unwrap();

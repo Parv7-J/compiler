@@ -3,6 +3,20 @@ use thiserror::Error;
 
 #[derive(Error, Diagnostic, Debug, Clone)]
 pub enum AnalysisError {
+    #[error("invalid type found")]
+    InvalidType {
+        #[label("type not defined")]
+        span: SourceSpan,
+        #[label("not a type")]
+        item_span: Option<SourceSpan>,
+    },
+    #[error("invalid api found")]
+    InvalidApi {
+        #[label("api not defined")]
+        span: SourceSpan,
+        #[label("not an api")]
+        item_span: Option<SourceSpan>,
+    },
     #[error("Duplicate Item Name")]
     #[diagnostic(help("rename an item"))]
     DuplicateItem {
@@ -82,5 +96,35 @@ pub enum AnalysisError {
         span: SourceSpan,
         #[label("item, not a type")]
         item_span: SourceSpan,
+    },
+    #[error("Unimplemented Method required by Api require")]
+    #[diagnostic(help("define the required method"))]
+    UnimplementedMethod {
+        #[label("requires this method to be implemented")]
+        method_span: SourceSpan,
+        #[label("this api")]
+        api_span: SourceSpan,
+        #[label("we require the api for this type")]
+        require_span: SourceSpan,
+    },
+    #[error("Method not required by the Api")]
+    #[diagnostic(help("remove the method"))]
+    ExtraMethod {
+        #[label("this method is not required by")]
+        method_span: SourceSpan,
+        #[label("this api")]
+        api_span: SourceSpan,
+        #[label("on this type")]
+        require_span: SourceSpan,
+    },
+    #[error("Superapi not implemented")]
+    #[diagnostic(help("implemented the required api"))]
+    UnimplementedSuperApi {
+        #[label("this api requires a superapi")]
+        require_span: SourceSpan,
+        #[label("this api requires a superapi")]
+        api_span: SourceSpan,
+        #[label("this api requires a superapi")]
+        super_api: SourceSpan,
     },
 }

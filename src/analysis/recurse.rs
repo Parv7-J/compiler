@@ -49,16 +49,16 @@ impl Analyzer<'_> {
         for item in item_iter {
             match item {
                 Item::Packing(packing) => {
-                    self.register_packing(packing);
+                    self.initialize_packing(packing);
                 }
                 Item::Aor(aor) => {
-                    self.register_aor(aor);
+                    self.initialize_aor(aor);
                 }
                 Item::Procedure(procedure) => {
-                    self.register_procedure(procedure);
+                    self.initialize_procedure(procedure);
                 }
                 Item::Api(api) => {
-                    self.register_api(api);
+                    self.initialize_api(api);
                 }
                 _ => unreachable!("filtered"),
             };
@@ -70,8 +70,8 @@ impl Analyzer<'_> {
 
         for item in method_and_require {
             match item {
-                Item::Methods(methods) => self.register_methods(methods),
-                Item::Require(require) => self.register_require(require),
+                Item::Methods(methods) => self.attach_methods(methods),
+                Item::Require(require) => self.attach_api(require),
                 _ => unreachable!("filtered"),
             }
         }

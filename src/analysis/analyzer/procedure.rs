@@ -4,30 +4,7 @@ use super::*;
 use crate::analysis::store::declaration::DeclarationType;
 
 impl Analyzer<'_> {
-    pub fn register_method_list(&mut self, procedures: &[Procedure]) {
-        for procedure in procedures {
-            let procedure_span = procedure.ident.0;
-            let procedure_iid = self.idents.insert(procedure_span);
-
-            let procedure_key = Key::new(self.scope, procedure_iid);
-
-            if let Some(procedure_did) = self.declarations.get(procedure_key) {
-                let declared_span = self.declarations.refer(procedure_did).span;
-                self.errors.push(
-                    AnalysisError::DuplicateMethod {
-                        declared_span: declared_span.into(),
-                        duplicate_span: procedure_span.into(),
-                    }
-                    .into(),
-                );
-            }
-
-            self.declarations
-                .insert(procedure_key, procedure_span, DeclarationType::procedure());
-        }
-    }
-
-    pub fn register_procedure(&mut self, procedure: &Procedure) -> (IdentId, DeclarationId) {
+    pub fn initialize_procedure(&mut self, procedure: &Procedure) -> (IdentId, DeclarationId) {
         let procedure_iid = self.idents.insert(procedure.ident.0);
         let procedure_key = Key::new(self.scope, procedure_iid);
         let procedure_did = self.declarations.get(procedure_key).unwrap();

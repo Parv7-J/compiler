@@ -149,11 +149,9 @@ impl DeclarationStore {
 }
 
 impl DeclarationStore {
-    pub fn insert_unknown(&mut self, key: Key, span: Span, ty: UnknownType) {
-        //WRONG
-        let new_scope = self.new_scope(key.scid);
+    pub fn insert_unknown(&mut self, key: Key, span: Span, ty: UnknownType, owned_scope: ScopeId) {
         let u_info = UnknownInfo {
-            scope_id: new_scope,
+            scope_id: owned_scope,
             span,
             ty,
         };
@@ -195,8 +193,8 @@ pub struct UnknownInfo {
 
 #[derive(Debug, Clone)]
 pub enum UnknownType {
-    UnknownMethods(HashMap<IdentId, DeclarationId>),
-    UnknowRequires,
+    UnknownMethods(ScopedMethods),
+    UnknowRequires(HashMap<DeclarationId, Vec<ScopedMethods>>),
 }
 
 #[derive(Debug, Clone)]
@@ -347,7 +345,7 @@ impl Procedure {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Procedure {
     pub arguments: HashMap<IdentId, SymbolId>,
     pub return_ty: Option<SymbolType>,

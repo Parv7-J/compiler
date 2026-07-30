@@ -1,25 +1,24 @@
 pub mod token;
 use token::*;
 
-pub const EOF_CHAR: char = '\0';
+const EOF_CHAR: char = '\0';
 
 #[derive(Debug, Clone)]
 pub struct Lexer<'a> {
-    pub input: &'a str,
-    pub at: u32,
-    pub chars: std::str::Chars<'a>,
-    pub state: State,
-    pub newlines: Vec<u32>,
+    input: &'a str,
+    at: u32,
+    chars: std::str::Chars<'a>,
+    state: State,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum State {
+enum State {
     Idle,
     Started(Started),
 }
 
 #[derive(Debug, Clone, PartialEq, Copy)]
-pub enum Started {
+enum Started {
     Operator(Operator),
     String(u32),
     Ident(u32),
@@ -50,8 +49,11 @@ impl<'a> Lexer<'a> {
             at: 0,
             chars: input.chars(),
             state: State::Idle,
-            newlines: Vec::new(),
         })
+    }
+
+    pub fn input(&self) -> &'a str {
+        self.input
     }
 
     ///Constructs a Token from a TokenKind
@@ -112,7 +114,7 @@ impl<'a> Lexer<'a> {
     ///the end of file
     ///Errors are handled using the Unknown TokenKind, but are not reported, and thus its the job of
     ///the Parser to handle lexing errors
-    pub fn advance_token(&mut self) -> Token {
+    fn advance_token(&mut self) -> Token {
         loop {
             let ch = self.peek();
 
@@ -139,16 +141,9 @@ impl<'a> Lexer<'a> {
                 }
             }
 
-            //TODO:  no need for this now
-            if self.state == State::Idle {
-                if ch == '\n' {
-                    let at = self.bump();
-                    self.newlines.push(at);
-                    continue;
-                } else if ch.is_ascii_whitespace() {
-                    self.bump();
-                    continue;
-                }
+            if self.state == State::Idle && ch.is_ascii_whitespace() {
+                self.bump();
+                continue;
             }
 
             match self.state {
@@ -295,11 +290,9 @@ impl<'a> Lexer<'a> {
                 }
                 State::Started(Started::MultiLineComment) => {
                     self.bump();
-
                     if ch != '*' {
                         continue;
                     }
-
                     if self.peek() == '/' {
                         self.bump();
                         self.state = State::Idle;

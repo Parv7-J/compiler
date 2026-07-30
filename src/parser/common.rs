@@ -97,7 +97,7 @@ impl Parser<'_> {
             None => Err(ParseError::Unexpected {
                 expected: Expected::Type,
                 found: Found::Eof,
-                span: (self.lexer.input.len().saturating_sub(1), 1).into(),
+                span: (self.lexer.input().len().saturating_sub(1), 1).into(),
             }
             .into()),
         }
@@ -168,7 +168,7 @@ impl Parser<'_> {
             None => Err(ParseError::Unexpected {
                 expected: Expected::Type,
                 found: Found::Eof,
-                span: (self.lexer.input.len().saturating_sub(1), 1).into(),
+                span: (self.lexer.input().len().saturating_sub(1), 1).into(),
             }
             .into()),
         }

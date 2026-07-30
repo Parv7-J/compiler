@@ -31,7 +31,7 @@ impl Parser<'_> {
                 return Err(ParseError::Unexpected {
                     expected: Expected::Expr,
                     found: Found::Eof,
-                    span: (self.lexer.input.len().saturating_sub(1), 1).into(),
+                    span: (self.lexer.input().len().saturating_sub(1), 1).into(),
                 }
                 .into());
             }

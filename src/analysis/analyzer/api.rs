@@ -5,7 +5,7 @@ use super::*;
 use crate::{analysis::store::declaration::DeclarationType, lexer::token::Span};
 
 impl Analyzer<'_> {
-    pub fn register_api(&mut self, api: &Api) -> DeclarationId {
+    pub fn initialize_api(&mut self, api: &Api) -> DeclarationId {
         let api_iid = self.idents.insert(api.ident.0);
         let api_key = Key::new(self.scope, api_iid);
         let api_did = self.declarations.get(api_key).unwrap();
@@ -20,11 +20,12 @@ impl Analyzer<'_> {
 
         let api_scope = self.declarations.scope_from_id(api_did);
         self.enter_scope(api_scope);
-        self.register_method_list(&api.procedures);
+
+        self.register_procedures(&api.procedures);
 
         let mut methods = HashMap::new();
         for procedure in &api.procedures {
-            let (iid, did) = self.register_procedure(procedure);
+            let (iid, did) = self.initialize_procedure(procedure);
             //only one iid - did pair exists
             methods.insert(iid, did);
         }

@@ -39,12 +39,13 @@ pub fn from_spans(span1: Span, span2: Span) -> miette::SourceSpan {
 
 /*---------------------------------------------------------------------------------------------------*/
 
+//TODO: add %
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TokenKind {
     String,
     Ident,
     Number,
-    //TODO: add %
     Char,
     Operator(Operator),
     Keyword(Keyword),

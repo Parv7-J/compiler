@@ -3,12 +3,12 @@ use std::collections::HashMap;
 
 use super::*;
 use crate::{
-    analysis::store::declaration::{DeclarationType, UnknownType},
+    analysis::store::declaration::{DeclarationType, ScopedMethods, UnknownType},
     lexer::token::Span,
 };
 
 impl Analyzer<'_> {
-    pub fn register_methods(&mut self, methods: &Methods) {
+    pub fn attach_methods(&mut self, methods: &Methods) {
         let type_span = methods.ident.0;
         let type_iid = self.idents.insert(type_span);
         let type_key = Key::new(self.scope, type_iid);
@@ -40,8 +40,9 @@ impl Analyzer<'_> {
 
         let methods_scope = self.declarations.new_scope(self.scope);
         self.enter_scope(methods_scope);
-        self.register_method_list(&methods.procedures);
-        let procedures = self.check_init(&methods.procedures, type_span);
+
+        self.register_procedures(&methods.procedures);
+        let procedures = self.initialize_methods(&methods.procedures, type_span);
 
         let type_info = self
             .declarations
@@ -64,16 +65,42 @@ impl Analyzer<'_> {
             }
         }
 
-        self.exit_scope();
-
         self.declarations.insert_unknown(
-            Key::new(self.scope, type_iid),
+            Key::new(self.declarations.parent_scope(self.scope), type_iid),
             type_span,
-            UnknownType::UnknownMethods(procedures),
+            UnknownType::UnknownMethods(ScopedMethods {
+                scope: self.scope,
+                methods: procedures,
+            }),
+            self.scope,
         );
+
+        self.exit_scope();
     }
 
-    pub fn check_init(
+    pub fn register_procedures(&mut self, procedures: &[Procedure]) {
+        for procedure in procedures {
+            let procedure_span = procedure.ident.0;
+            let procedure_iid = self.idents.insert(procedure_span);
+
+            let procedure_key = Key::new(self.scope, procedure_iid);
+
+            if let Some(procedure_did) = self.declarations.get(procedure_key) {
+                let declared_span = self.declarations.refer(procedure_did).span;
+                self.errors.push(
+                    AnalysisError::DuplicateMethod {
+                        declared_span: declared_span.into(),
+                        duplicate_span: procedure_span.into(),
+                    }
+                    .into(),
+                );
+            }
+
+            self.declarations
+                .insert(procedure_key, procedure_span, DeclarationType::procedure());
+        }
+    }
+    fn initialize_methods(
         &mut self,
         procedures: &[Procedure],
         span: Span,
@@ -81,7 +108,7 @@ impl Analyzer<'_> {
         let mut has_init = false;
         let mut inner_methods = HashMap::new();
         for procedure in procedures {
-            let (iid, did) = self.register_procedure(procedure);
+            let (iid, did) = self.initialize_procedure(procedure);
             if self.idents.get(iid).unwrap() == "init" {
                 has_init = true;
             }

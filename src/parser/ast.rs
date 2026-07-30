@@ -137,6 +137,7 @@ pub struct Packing {
     pub ident: SpannedIdent,
     pub fields: Vec<Field>,
 }
+
 #[derive(Debug, Clone)]
 pub struct Aor {
     pub ident: SpannedIdent,

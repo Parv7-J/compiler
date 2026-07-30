@@ -36,7 +36,7 @@ impl<'a> Parser<'a> {
         //TODO: can we get away without to_string()? as we are printing the errors right away
         let source = Arc::new(miette::NamedSource::new(
             fname,
-            self.lexer.input.to_string(),
+            self.lexer.input().to_string(),
         ));
 
         while let Some(kind) = self.peek() {
@@ -72,7 +72,7 @@ impl<'a> Parser<'a> {
 
         Ast {
             items,
-            input: self.lexer.input,
+            input: self.lexer.input(),
         }
     }
 
@@ -137,7 +137,7 @@ impl<'a> Parser<'a> {
             None => Err(ParseError::Unexpected {
                 expected: Expected::Kind(kind),
                 found: Found::Eof,
-                span: (self.lexer.input.len().saturating_sub(1), 1).into(),
+                span: (self.lexer.input().len().saturating_sub(1), 1).into(),
             }
             .into()),
         }
