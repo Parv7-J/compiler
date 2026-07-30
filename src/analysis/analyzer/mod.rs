@@ -1,4 +1,3 @@
-//TODO: methods should get 'this' symbol too
 use crate::analysis::declaration::DeclarationType;
 use miette::Report;
 

@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 mod analyzer;
 mod error;
+mod expr;
 mod recurse;
 mod stmt;
 mod store;
@@ -33,13 +34,13 @@ impl<'a> SemanticAnalysis<'a> {
 
     pub fn analyze(mut self) -> (Ast<'a>, Analyzer<'a>) {
         let items = self.ast.items.iter().collect::<Vec<_>>();
-        self.analyzer.collect(&items);
-        self.analyzer.recurse(&items);
+        self.analyzer.collect_and_recurse(items);
 
         let source = Arc::new(miette::NamedSource::new(
             "language",
             self.ast.input.to_string(),
         ));
+
         if !self.analyzer.errors.is_empty() {
             eprintln!("Found {} semantic errors ->\n", self.analyzer.errors.len());
         }

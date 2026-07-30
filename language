@@ -1,5 +1,3 @@
-//TODO: remove empty methods block error
-
 packing Foo{
     first(i32),
     last(i32)

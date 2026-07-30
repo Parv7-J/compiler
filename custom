@@ -1,8 +1,16 @@
 packing Foo {}
 
+api Clone {
+    proc clone[] {}
+}
+
 api Debug also Clone {
     proc debug[] {}
 }
+
+require Clone for Foo {
+    proc clone[a(i32)] {}
+} 
 
 require Debug for Foo {
    proc de[] {}

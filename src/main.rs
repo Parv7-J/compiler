@@ -15,7 +15,7 @@ fn main() -> miette::Result<()> {
     let mut args = std::env::args();
     //auto panics if not valid unicode, so fname is always a string only
     args.next();
-    //TODO: introduce clap
+
     let fname = args.next().unwrap_or(String::from("language"));
 
     let input = fs::read_to_string(&fname).unwrap();

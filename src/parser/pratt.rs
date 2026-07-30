@@ -1,5 +1,3 @@
-//TODO: tuple types, hand initializing structs
-
 use super::Parser;
 use super::ast::*;
 use crate::lexer::token::*;

@@ -1,7 +1,3 @@
-//TODO: fix methods, requires structures inside the DeclarationStore, as it is right now a pain to
-//find them
-//TODO: add other procedures collection, which are inside methods and requires, but can only be done
-//after completing the previous todo
 use crate::{
     analysis::{analyzer::Analyzer, store::declaration::DeclarationInfo},
     parser::ast::Procedure,
@@ -11,7 +7,12 @@ use super::*;
 use crate::analysis::store::declaration::DeclarationType;
 
 impl Analyzer<'_> {
-    pub fn collect<'a>(&mut self, items: impl AsRef<[&'a Item]>) {
+    pub fn collect_and_recurse<'a>(&mut self, items: impl AsRef<[&'a Item]>) {
+        self.collect_declarations(&items);
+        self.recurse_into_declarations(&items);
+    }
+
+    fn collect_declarations<'a>(&mut self, items: impl AsRef<[&'a Item]>) {
         let items = items.as_ref();
 
         let item_iter = items
@@ -79,7 +80,7 @@ impl Analyzer<'_> {
         self.clear();
     }
 
-    pub fn recurse<'a>(&mut self, items: impl AsRef<[&'a Item]>) {
+    fn recurse_into_declarations<'a>(&mut self, items: impl AsRef<[&'a Item]>) {
         let items = items.as_ref();
         for item in items {
             #[allow(clippy::single_match)]
@@ -104,6 +105,7 @@ impl Analyzer<'_> {
         self.declarations.db.iter_mut().for_each(|ent| {
             ent.current_entry = 0;
         });
+
         self.declarations.unknown.values_mut().for_each(|ent| {
             ent.current_entry = 0;
         });
@@ -122,6 +124,7 @@ impl Analyzer<'_> {
         let procedure_key = Key::new(self.scope, procedure_iid);
         let procedure_did = self.declarations.get(procedure_key).unwrap();
         let procedure_scope = self.dinfo_at(procedure_did).scope_id;
+
         self.enter_scope(procedure_scope);
         let items = procedure
             .body
@@ -132,8 +135,9 @@ impl Analyzer<'_> {
                 BlockItem::Stmt(_stmt) => None,
             })
             .collect::<Vec<_>>();
-        self.collect(&items);
-        self.recurse(&items);
+
+        self.collect_and_recurse(items);
+
         let stmts = procedure
             .body
             .0
@@ -143,34 +147,11 @@ impl Analyzer<'_> {
                 BlockItem::Stmt(stmt) => Some(stmt),
             })
             .collect::<Vec<_>>();
+
         for stmt in stmts {
             self.register_stmt(stmt);
         }
+
         self.exit_scope();
     }
-
-    // pub fn get_methods(&mut self, methods: &Methods) {
-    //     //we do need the methods scope
-    //     let type_span = methods.ident.0;
-    //     let type_iid = self.idents.contains(type_span).unwrap();
-    //     let type_key = DeclarationKey::new(self.scope, type_iid);
-    //     match self.declarations.get_did(type_key) {
-    //         Some(did) => {
-    //             let first = self.declarations.first_declaration(did);
-    //             let methods_scope = match first.ty {
-    //                 DeclarationType::Packing(packing) => packing.methods.0,
-    //                 DeclarationType::Aor(aor) => aor.methods.0,
-    //                 _ => unreachable("methods for types only"),
-    //             };
-    //         }
-    //         None => todo!(),
-    //     }
-    //     for procedure in &methods.procedures {
-    //         self.get_procedure(procedure);
-    //     }
-    //     //as the last exit will result in the exit to the methods scope
-    //     if !methods.procedures.is_empty() {
-    //         self.exit_scope();
-    //     }
-    // }
 }

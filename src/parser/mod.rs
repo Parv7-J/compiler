@@ -33,7 +33,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse(mut self, fname: &str) -> Ast<'a> {
         let mut items = Vec::new();
-        //TODO: can we get away without to_string()? as we are printing the errors right away
+        //can we get away without to_string()? as we are printing the errors right away
         let source = Arc::new(miette::NamedSource::new(
             fname,
             self.lexer.input().to_string(),
@@ -45,12 +45,10 @@ impl<'a> Parser<'a> {
                 match item_result {
                     Ok(item) => items.push(item),
                     Err(report) => self.errors.push(report),
-                    //TODO: add synchronization
                 }
                 continue;
             }
 
-            //TODO: fix this, by adding synchronization/batching
             let Token { kind, span } = self.next().unwrap();
             self.errors
                 .push(miette::Report::from(ParseError::TopLevelNonItem {

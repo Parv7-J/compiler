@@ -39,8 +39,6 @@ pub fn from_spans(span1: Span, span2: Span) -> miette::SourceSpan {
 
 /*---------------------------------------------------------------------------------------------------*/
 
-//TODO: add %
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TokenKind {
     String,
@@ -113,7 +111,7 @@ pub enum BitWidth {
 pub enum Operator {
     BitwiseAnd,                       //lhs rhs should be numbers
     BitwiseOr,                        //lhs rhs should be numbers
-    Not,                              //TODO: divide to logical not and bitwise not
+    Not,                              //logical not or bitwise not
     Assign,                           //rhs should be assignable to lhs
     Plus,  //lhs and rhs are addable like string string, number number, but not string number
     Minus, //same
@@ -408,7 +406,6 @@ impl std::fmt::Display for BitWidth {
             BitWidth::Sixteen => "16",
             BitWidth::ThirtyTwo => "32",
             BitWidth::SixtyFour => "64",
-            //TODO: word depends on the machine
             BitWidth::Word => "64",
         };
         write!(f, "{s}")

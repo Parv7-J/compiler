@@ -63,7 +63,6 @@ impl<'a> Lexer<'a> {
     ///As it may call self.bump(), we need to adhere by its requirements
     fn produce_token(&mut self, kind: TokenKind, start_opt: Option<u32>) -> Token {
         let start = start_opt.unwrap_or_else(|| self.bump());
-        //TODO: improve this messy logic
         match kind {
             TokenKind::Delimiter(_) => Token::new(kind, start, start + 1),
             TokenKind::Punctuation(_) => Token::new(kind, start, start + 1),
@@ -150,7 +149,6 @@ impl<'a> Lexer<'a> {
                 State::Idle => match ch {
                     '&' | '|' | '+' | '*' | '<' | '>' | '=' | '!' | '-' => {
                         self.bump();
-                        //TODO: remove started operator
                         self.state = State::Started(Started::Operator(ch.try_into().unwrap()))
                     }
                     '/' => {
@@ -189,7 +187,6 @@ impl<'a> Lexer<'a> {
                     }
 
                     _ => {
-                        //TODO: batch unknowns
                         let at = self.bump();
                         return Token::new(TokenKind::Unknown, at, at + 1);
                     }
