@@ -8,7 +8,7 @@ use crate::{
 
 impl Analyzer<'_> {
     pub fn attach_methods(&mut self, methods: &Methods) {
-        let type_span = methods.ident.0;
+        let type_span = methods.ident.unwrap().0;
         let type_iid = self.idents.insert(type_span);
         let type_key = Key::new(self.scope, type_iid);
         match self.declarations.get(type_key) {
@@ -79,7 +79,7 @@ impl Analyzer<'_> {
 
     pub fn register_procedures(&mut self, procedures: &[Procedure]) {
         for procedure in procedures {
-            let procedure_span = procedure.ident.0;
+            let procedure_span = procedure.ident.unwrap().0;
             let procedure_iid = self.idents.insert(procedure_span);
 
             let procedure_key = Key::new(self.scope, procedure_iid);

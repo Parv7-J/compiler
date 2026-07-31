@@ -11,13 +11,13 @@ impl Parser<'_> {
             Some(TokenKind::Keyword(Keyword::While)) => self.parse_while(),
             Some(TokenKind::Keyword(Keyword::Seed)) => self.parse_seed(),
             Some(TokenKind::Keyword(Keyword::Break)) => {
-                let token = self.next().unwrap();
-                self.expect(TokenKind::Punctuation(Punctuation::Semicolon))?;
+                let token = self.consume();
+                self.expect(SEMICOLON)?;
                 Ok(Stmt::Break(token.span))
             }
             Some(TokenKind::Keyword(Keyword::Continue)) => {
-                let token = self.next().unwrap();
-                self.expect(TokenKind::Punctuation(Punctuation::Semicolon))?;
+                let token = self.consume();
+                self.expect(SEMICOLON)?;
                 Ok(Stmt::Continue(token.span))
             }
             _ => {

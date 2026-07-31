@@ -51,6 +51,19 @@ pub enum ParseError {
         #[label("add '{delimiter}' before this")]
         span: SourceSpan,
     },
+    #[error("closing '{delimiter}' missing")]
+    UndelimitedEnd {
+        delimiter: TokenKind,
+        #[label("add '{delimiter}' after this")]
+        insides: SourceSpan,
+    },
+    #[error("semicolon missing")]
+    MissingSemicolon {
+        #[label(
+            "only statements/items are allowed , which must end with a semicolon. This is an expression"
+        )]
+        expr_stmt: SourceSpan,
+    },
 }
 
 #[derive(Debug)]

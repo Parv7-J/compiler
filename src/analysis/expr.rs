@@ -126,7 +126,7 @@ impl Analyzer<'_> {
     }
 }
 
-enum Ty {
-    String,
-    Number,
-}
+// pub enum Ty {
+//     String,
+//     Number,
+// }

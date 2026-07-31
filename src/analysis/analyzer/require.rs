@@ -10,11 +10,11 @@ use crate::{
 
 impl Analyzer<'_> {
     pub fn attach_api(&mut self, require: &Require) {
-        let type_span = require.ident.0;
+        let type_span = require.ident.unwrap().0;
         let type_key = Key::new(self.scope, self.idents.insert(type_span));
         let is_type = self.is_type(type_key, type_span);
 
-        let api_span = require.api.0;
+        let api_span = require.api.unwrap().0;
         let api_key = Key::new(self.scope, self.idents.insert(api_span));
         let is_api = self.is_api(api_key, api_span);
 

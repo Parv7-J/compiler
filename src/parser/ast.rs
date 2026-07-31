@@ -19,18 +19,19 @@ pub enum Item {
 }
 
 impl Item {
-    // pub fn span(&self) -> Span {
-    //     match self {
-    //         Item::Packing(packing) => packing.ident.0,
-    //         Item::Aor(aor) => aor.ident.0,
-    //         Item::Procedure(procedure) => procedure.ident.0,
-    //         Item::Methods(methods) => methods.ident.0,
-    //         Item::Api(api) => api.ident.0,
-    //         Item::Require(require) => require.ident.0,
-    //         Item::Get(get) => get.module.0,
-    //         Item::Block(_) => panic!("block aint got no ident"),
-    //     }
-    // }
+    ///BEWARE: this is so so wrong
+    pub fn span(&self) -> Span {
+        match self {
+            Item::Packing(packing) => packing.ident.0,
+            Item::Aor(aor) => aor.ident.0,
+            Item::Procedure(procedure) => procedure.ident.unwrap().0,
+            Item::Methods(methods) => methods.ident.unwrap().0,
+            Item::Api(api) => api.ident.unwrap().0,
+            Item::Require(require) => require.ident.unwrap().0,
+            Item::Get(get) => get.module.0,
+            Item::Block(_) => panic!("block aint got no ident"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

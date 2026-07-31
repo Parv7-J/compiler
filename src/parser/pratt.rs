@@ -13,8 +13,23 @@ const POSTFIX_BP: u8 = 19;
 impl Parser<'_> {
     ///Expression statements are expressions that end with a semicolon, thus they allow assignments
     pub fn parse_exprstmt(&mut self) -> ParseResult<Stmt> {
+        let start = match self.token.or_else(|| self.lexer.clone().next()) {
+            Some(token) => token.span.start,
+            None => self.lexer.input().len().saturating_sub(1) as u32,
+        };
         let expr = self.expr_bp(EXPR_STMT_BP)?;
-        self.expect(TokenKind::Punctuation(Punctuation::Semicolon))?;
+        if let Err(ParseError::Unexpected {
+            expected: _,
+            found: _,
+            span,
+        }) = self.expect(SEMICOLON)
+        {
+            let end = (span.offset() - 1) as u32;
+            let span = Span::new(start, end);
+            self.errors.push(ParseError::MissingSemicolon {
+                expr_stmt: span.into(),
+            });
+        }
         Ok(Stmt::Expr(expr))
     }
 
@@ -31,34 +46,32 @@ impl Parser<'_> {
                     expected: Expected::Expr,
                     found: Found::Eof,
                     span: (self.lexer.input().len().saturating_sub(1), 1).into(),
-                }
-                .into());
+                });
             }
         };
 
         let mut lhs = match token.kind {
-            TokenKind::Delimiter(Delimiter::ParenOpen) => {
+            P_OPEN => {
                 let expr_inner = self.parse_expr()?;
-                self.expect(TokenKind::Delimiter(Delimiter::ParenClose))?;
+                self.expect_and_push(TokenKind::Delimiter(Delimiter::ParenClose));
                 expr_inner
             }
-            TokenKind::Delimiter(Delimiter::SquareOpen) => {
-                let mut expr_list = Vec::new();
-                loop {
-                    if self.peek().is_none()
-                        || self.peek() == Some(TokenKind::Delimiter(Delimiter::SquareClose))
-                    {
-                        break;
-                    }
-                    expr_list.push(self.parse_expr()?);
-                    if self
-                        .expect(TokenKind::Punctuation(Punctuation::Comma))
-                        .is_err()
-                    {
-                        break;
-                    }
+            S_OPEN => {
+                let expr_list = self.parse_delimited(COMMA, S_CLOSE, Self::parse_expr);
+                if let Err(ParseError::Unexpected {
+                    expected: _,
+                    found: _,
+                    span,
+                }) = self.expect(S_CLOSE)
+                {
+                    let start = token.span.start;
+                    let end = (span.offset() - 1) as u32;
+                    let span = Span::new(start, end);
+                    self.errors.push(ParseError::UndelimitedEnd {
+                        insides: span.into(),
+                        delimiter: S_CLOSE,
+                    });
                 }
-                self.expect(TokenKind::Delimiter(Delimiter::SquareClose))?;
                 Expr::List(ExprList(expr_list))
             }
             TokenKind::Ident => Expr::Atom(Atom::Ident(SpannedIdent(token.span))),
@@ -91,8 +104,7 @@ impl Parser<'_> {
                     expected: Expected::Expr,
                     found: Found::Kind(kind),
                     span: token.span.into(),
-                }
-                .into());
+                });
             }
         };
 
@@ -194,17 +206,3 @@ fn prefix_binding_power(op: Operator) -> Option<((), u8)> {
         _ => None,
     }
 }
-
-// pub enum InfixOperator {
-//         Dot,
-//         Star,
-//         ForwardSlash,
-//         Plus,
-//         Minus,
-//         Comparision(_) => Some((11, 12)),
-//         BitwiseAnd => Some((9, 10)),
-//         BitwiseOr => Some((7, 8)),
-//         Logical(LogicalOperator::And) => Some((5, 6)),
-//         Logical(LogicalOperator::Or) => Some((3, 4)),
-//         Assign | Operator::CompoundAssign(_) => Some((2, 1)),
-// }

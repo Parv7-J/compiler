@@ -114,7 +114,7 @@ use crate::{
         analyzer::Analyzer,
         store::{IdentId, SymbolId, SymbolKey, SymbolType},
     },
-    parser::ast::{Atom, Expr, IdentTy, SpannedIdent, Stmt},
+    parser::ast::{Expr, IdentTy, SpannedIdent, Stmt},
 };
 
 #[allow(unused_variables)]

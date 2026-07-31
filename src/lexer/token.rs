@@ -19,6 +19,12 @@ pub struct Span {
     pub end: u32,
 }
 
+impl Span {
+    pub fn new(start: u32, end: u32) -> Self {
+        Self { start, end }
+    }
+}
+
 impl From<Span> for miette::SourceSpan {
     fn from(value: Span) -> Self {
         Self::new(

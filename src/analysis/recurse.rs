@@ -120,7 +120,7 @@ impl Analyzer<'_> {
     }
 
     pub fn get_procedure(&mut self, procedure: &Procedure) {
-        let procedure_iid = self.idents.insert(procedure.ident.0);
+        let procedure_iid = self.idents.insert(procedure.ident.unwrap().0);
         let procedure_key = Key::new(self.scope, procedure_iid);
         let procedure_did = self.declarations.get(procedure_key).unwrap();
         let procedure_scope = self.dinfo_at(procedure_did).scope_id;

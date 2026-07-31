@@ -13,3 +13,4 @@
 11. tuple types + hand initializing types 
 12. enum variant getting using ::
 13. collect all requires and (methods + its methods) first before attaching them
+14. made identifiers optional, thus need to change some machinery, right now just unwrapping

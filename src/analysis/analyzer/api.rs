@@ -5,7 +5,7 @@ use crate::{analysis::store::declaration::DeclarationType, lexer::token::Span};
 
 impl Analyzer<'_> {
     pub fn initialize_api(&mut self, api: &Api) -> DeclarationId {
-        let api_iid = self.idents.insert(api.ident.0);
+        let api_iid = self.idents.insert(api.ident.unwrap().0);
         let api_key = Key::new(self.scope, api_iid);
         let api_did = self.declarations.get(api_key).unwrap();
 

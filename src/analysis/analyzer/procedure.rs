@@ -5,7 +5,7 @@ use crate::analysis::store::declaration::DeclarationType;
 
 impl Analyzer<'_> {
     pub fn initialize_procedure(&mut self, procedure: &Procedure) -> (IdentId, DeclarationId) {
-        let procedure_iid = self.idents.insert(procedure.ident.0);
+        let procedure_iid = self.idents.insert(procedure.ident.unwrap().0);
         let procedure_key = Key::new(self.scope, procedure_iid);
         let procedure_did = self.declarations.get(procedure_key).unwrap();
         let procedure_scope = self.declarations.scope_from_id(procedure_did);

@@ -114,13 +114,20 @@ impl Parser<'_> {
         Ok(procs)
     }
 
-    fn parse_delimited<T>(
+    pub fn parse_delimited<T>(
         &mut self,
         delimiter: TokenKind,
         end: TokenKind,
         mut method: impl FnMut(&mut Self) -> ParseResult<T>,
     ) -> Vec<T> {
+        match self.peek() {
+            Some(tk) if tk == end => return vec![],
+            None => return vec![],
+            _ => {}
+        };
+
         let mut list = Vec::new();
+
         loop {
             match method(self) {
                 Ok(list_item) => list.push(list_item),
@@ -147,6 +154,8 @@ impl Parser<'_> {
         list
     }
 
+    ///syncs till the next token according to f, or EOF.
+    ///doesnt consume the sync token
     fn synchronize(&mut self, f: impl Fn(TokenKind) -> bool) {
         while let Some(kind) = self.peek() {
             if f(kind) {

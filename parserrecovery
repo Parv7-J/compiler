@@ -1,5 +1,2 @@
-get hello,world,why, from "string";
-
-proc foo[a(i32), b,c,d heklahfgahwefuiabhfia, ]: i32 {
-
+proc foo[] {
 }
