@@ -5,41 +5,43 @@ use crate::parser::error::ParseError;
 
 impl Parser<'_> {
     pub fn parse_get(&mut self) -> miette::Result<Get> {
-        let get = self.expect(TokenKind::Keyword(Keyword::Get))?;
-        let imports = self.parse_identlist()?;
+        let get = self.consume();
+        let imports = self.parse_identlist(TokenKind::Keyword(Keyword::From));
         if imports.is_empty() {
             return Err(ParseError::EmptyImportsList {
                 span: get.span.into(),
             }
             .into());
         }
-        self.expect(TokenKind::Keyword(Keyword::From))?;
+        self.expect_and_push(TokenKind::Keyword(Keyword::From));
         let module = self.parse_string()?;
-        self.expect(TokenKind::Punctuation(Punctuation::Semicolon))?;
+        self.expect_and_push(TokenKind::Punctuation(Punctuation::Semicolon));
         Ok(Get { imports, module })
     }
 
     pub fn parse_require(&mut self) -> miette::Result<Require> {
-        self.expect(TokenKind::Keyword(Keyword::Require))?;
-        let api = self.parse_ident()?;
-        self.expect(TokenKind::Keyword(Keyword::For))?;
+        self.consume();
+        let api = self.option_ident();
+        self.expect_and_push(TokenKind::Keyword(Keyword::For));
         Ok(Require {
-            ident: self.parse_ident()?,
+            ident: self.option_ident(),
             api,
             procedures: self.parse_procs()?,
         })
     }
 
     pub fn parse_api(&mut self) -> miette::Result<Api> {
-        self.expect(TokenKind::Keyword(Keyword::Api))?;
-        let ident = self.parse_ident()?;
+        self.consume();
+        let ident = self.option_ident();
         let super_api = if let Ok(token) = self.expect(TokenKind::Keyword(Keyword::Also)) {
-            let list = self.parse_identlist()?;
+            let list = self.parse_identlist(TokenKind::Delimiter(Delimiter::CurlyOpen));
             if list.is_empty() {
-                return Err(ParseError::EmptySubApis {
-                    span: token.span.into(),
-                }
-                .into());
+                self.errors.push(
+                    ParseError::EmptySubApis {
+                        span: token.span.into(),
+                    }
+                    .into(),
+                );
             }
             list
         } else {
@@ -53,18 +55,18 @@ impl Parser<'_> {
     }
 
     pub fn parse_methods(&mut self) -> miette::Result<Methods> {
-        self.expect(TokenKind::Keyword(Keyword::Methods))?;
+        self.consume();
         Ok(Methods {
-            ident: self.parse_ident()?,
+            ident: self.option_ident(),
             procedures: self.parse_procs()?,
         })
     }
 
     pub fn parse_proc(&mut self) -> miette::Result<Procedure> {
-        self.expect(TokenKind::Keyword(Keyword::Proc))?;
-        let ident = self.parse_ident()?;
+        self.consume();
+        let ident = self.option_ident();
         self.expect(TokenKind::Delimiter(Delimiter::SquareOpen))?;
-        let args = self.parse_fields()?;
+        let args = self.parse_fields(TokenKind::Delimiter(Delimiter::SquareClose));
         self.expect(TokenKind::Delimiter(Delimiter::SquareClose))?;
 
         let return_value = if self
@@ -85,19 +87,19 @@ impl Parser<'_> {
     }
 
     pub fn parse_packing(&mut self) -> miette::Result<Packing> {
-        self.expect(TokenKind::Keyword(Keyword::Packing))?;
+        self.consume();
         let ident = self.parse_ident()?;
         self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;
-        let fields = self.parse_fields()?;
+        let fields = self.parse_fields(TokenKind::Delimiter(Delimiter::CurlyClose));
         self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
         Ok(Packing { ident, fields })
     }
 
     pub fn parse_aor(&mut self) -> miette::Result<Aor> {
-        self.expect(TokenKind::Keyword(Keyword::Aor))?;
+        self.consume();
         let ident = self.parse_ident()?;
         self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;
-        let variants = self.parse_variants()?;
+        let variants = self.parse_variants();
         self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
         Ok(Aor { ident, variants })
     }
@@ -116,13 +118,19 @@ impl Parser<'_> {
         Ok(procs)
     }
 
-    fn parse_identlist(&mut self) -> miette::Result<Vec<SpannedIdent>> {
-        if !matches!(self.peek(), Some(TokenKind::Ident)) {
-            return Ok(vec![]);
-        }
+    fn parse_identlist(&mut self, closing: TokenKind) -> Vec<SpannedIdent> {
         let mut idents = Vec::new();
         loop {
-            idents.push(self.parse_ident()?);
+            match self.parse_ident() {
+                Ok(ident) => idents.push(ident),
+                Err(report) => {
+                    self.errors.push(report);
+                    self.synchronize(|kind| {
+                        kind == closing
+                            || matches!(kind, TokenKind::Punctuation(Punctuation::Comma))
+                    });
+                }
+            }
             if self
                 .expect(TokenKind::Punctuation(Punctuation::Comma))
                 .is_err()
@@ -130,16 +138,23 @@ impl Parser<'_> {
                 break;
             }
         }
-        Ok(idents)
+        idents
     }
 
-    fn parse_fields(&mut self) -> miette::Result<Vec<Field>> {
-        if !matches!(self.peek(), Some(TokenKind::Ident)) {
-            return Ok(vec![]);
-        }
+    fn parse_fields(&mut self, closing: TokenKind) -> Vec<Field> {
         let mut fields = Vec::new();
         loop {
-            fields.push(self.parse_field()?);
+            match self.parse_field() {
+                Ok(field) => fields.push(field),
+                Err(report) => {
+                    self.errors.push(report);
+                    self.synchronize(|kind| {
+                        kind == closing
+                            || matches!(kind, TokenKind::Punctuation(Punctuation::Comma))
+                    });
+                }
+            };
+
             if self
                 .expect(TokenKind::Punctuation(Punctuation::Comma))
                 .is_err()
@@ -147,14 +162,27 @@ impl Parser<'_> {
                 break;
             }
         }
-        Ok(fields)
+
+        fields
     }
 
-    fn parse_variants(&mut self) -> miette::Result<Vec<Variant>> {
+    fn parse_variants(&mut self) -> Vec<Variant> {
         let mut variants = Vec::new();
         loop {
-            let variant = self.parse_variant()?;
-            variants.push(variant);
+            match self.parse_variant() {
+                Ok(variant) => variants.push(variant),
+                Err(report) => {
+                    self.errors.push(report);
+                    self.synchronize(|kind| {
+                        matches!(
+                            kind,
+                            TokenKind::Punctuation(Punctuation::Comma)
+                                | TokenKind::Delimiter(Delimiter::CurlyClose)
+                        )
+                    });
+                }
+            };
+
             if self
                 .expect(TokenKind::Punctuation(Punctuation::Comma))
                 .is_err()
@@ -163,6 +191,26 @@ impl Parser<'_> {
             }
         }
 
-        Ok(variants)
+        variants
+    }
+
+    fn synchronize(&mut self, f: impl Fn(TokenKind) -> bool) {
+        while let Some(kind) = self.peek() {
+            if f(kind) {
+                return;
+            } else {
+                self.consume();
+            }
+        }
+    }
+
+    fn option_ident(&mut self) -> Option<SpannedIdent> {
+        match self.parse_ident() {
+            Ok(ident) => Some(ident),
+            Err(report) => {
+                self.errors.push(report);
+                None
+            }
+        }
     }
 }

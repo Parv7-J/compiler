@@ -19,18 +19,18 @@ pub enum Item {
 }
 
 impl Item {
-    pub fn span(&self) -> Span {
-        match self {
-            Item::Packing(packing) => packing.ident.0,
-            Item::Aor(aor) => aor.ident.0,
-            Item::Procedure(procedure) => procedure.ident.0,
-            Item::Methods(methods) => methods.ident.0,
-            Item::Api(api) => api.ident.0,
-            Item::Require(require) => require.ident.0,
-            Item::Get(get) => get.module.0,
-            Item::Block(_) => panic!("block aint got no ident"),
-        }
-    }
+    // pub fn span(&self) -> Span {
+    //     match self {
+    //         Item::Packing(packing) => packing.ident.0,
+    //         Item::Aor(aor) => aor.ident.0,
+    //         Item::Procedure(procedure) => procedure.ident.0,
+    //         Item::Methods(methods) => methods.ident.0,
+    //         Item::Api(api) => api.ident.0,
+    //         Item::Require(require) => require.ident.0,
+    //         Item::Get(get) => get.module.0,
+    //         Item::Block(_) => panic!("block aint got no ident"),
+    //     }
+    // }
 }
 
 #[derive(Debug, Clone)]
@@ -204,7 +204,7 @@ pub enum ArrType {
 
 #[derive(Debug, Clone)]
 pub struct Procedure {
-    pub ident: SpannedIdent,
+    pub ident: Option<SpannedIdent>,
     pub args: Vec<Field>,
     pub return_value: Option<IdentTy>,
     pub body: Block,
@@ -212,20 +212,20 @@ pub struct Procedure {
 
 #[derive(Debug, Clone)]
 pub struct Methods {
-    pub ident: SpannedIdent,
+    pub ident: Option<SpannedIdent>,
     pub procedures: Vec<Procedure>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Api {
-    pub ident: SpannedIdent,
+    pub ident: Option<SpannedIdent>,
     pub super_api: Vec<SpannedIdent>,
     pub procedures: Vec<Procedure>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Require {
-    pub ident: SpannedIdent,
-    pub api: SpannedIdent,
+    pub ident: Option<SpannedIdent>,
+    pub api: Option<SpannedIdent>,
     pub procedures: Vec<Procedure>,
 }

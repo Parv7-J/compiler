@@ -39,22 +39,8 @@ impl<'a> Parser<'a> {
             self.lexer.input().to_string(),
         ));
 
-        while let Some(kind) = self.peek() {
-            if matches!(kind, TokenKind::Keyword(_)) {
-                let item_result = self.parse_item();
-                match item_result {
-                    Ok(item) => items.push(item),
-                    Err(report) => self.errors.push(report),
-                }
-                continue;
-            }
-
-            let Token { kind, span } = self.next().unwrap();
-            self.errors
-                .push(miette::Report::from(ParseError::TopLevelNonItem {
-                    kind,
-                    span: span.into(),
-                }));
+        while let Some(item) = self.parse_item() {
+            items.push(item)
         }
 
         if !self.errors.is_empty() {
@@ -74,10 +60,12 @@ impl<'a> Parser<'a> {
         }
     }
 
+    ///removes the token from the lexer
     fn next(&mut self) -> Option<Token> {
         self.token.take().or_else(|| self.lexer.next())
     }
 
+    ///returns the token at the top of the lexer, but doesnt remove it
     fn peek(&mut self) -> Option<TokenKind> {
         let token = self.token.as_ref();
         if let Some(t) = token {
@@ -93,31 +81,80 @@ impl<'a> Parser<'a> {
         None
     }
 
-    ///panics if there is no next token to consume
+    ///panics if there is no next token to consume, i.e should be called only if certain that EOF is
+    ///not the next token
     fn consume(&mut self) -> Token {
         self.token.take().or_else(|| self.lexer.next()).unwrap()
     }
 
-    ///panics if there is no next token to peek
-    fn parse_item(&mut self) -> miette::Result<Item> {
-        let item = match self.peek().unwrap() {
-            TokenKind::Keyword(Keyword::Get) => Item::Get(self.parse_get()?),
-            TokenKind::Keyword(Keyword::Proc) => Item::Procedure(self.parse_proc()?),
-            TokenKind::Keyword(Keyword::Methods) => Item::Methods(self.parse_methods()?),
-            TokenKind::Keyword(Keyword::Require) => Item::Require(self.parse_require()?),
-            TokenKind::Keyword(Keyword::Aor) => Item::Aor(self.parse_aor()?),
-            TokenKind::Keyword(Keyword::Packing) => Item::Packing(self.parse_packing()?),
-            TokenKind::Keyword(Keyword::Api) => Item::Api(self.parse_api()?),
-            TokenKind::Delimiter(Delimiter::CurlyOpen) => Item::Block(self.parse_block()?),
-            kind => {
-                return Err(ParseError::TopLevelNonItem {
-                    kind,
-                    span: self.next().unwrap().span.into(),
+    ///Returns the next item, or None if EOF is encountered
+    fn parse_item(&mut self) -> Option<Item> {
+        while self.peek().is_some() {
+            let kind = self.peek().unwrap();
+            if let TokenKind::Keyword(keyword) = kind {
+                match keyword {
+                    Keyword::Get => match self.parse_get() {
+                        Ok(get) => return Some(Item::Get(get)),
+                        Err(err) => self.errors.push(err),
+                    },
+                    Keyword::Proc => match self.parse_proc() {
+                        Ok(proc) => return Some(Item::Procedure(proc)),
+                        Err(err) => self.errors.push(err),
+                    },
+                    Keyword::Methods => match self.parse_methods() {
+                        Ok(methods) => return Some(Item::Methods(methods)),
+                        Err(err) => self.errors.push(err),
+                    },
+                    Keyword::Require => match self.parse_require() {
+                        Ok(require) => return Some(Item::Require(require)),
+                        Err(err) => self.errors.push(err),
+                    },
+                    Keyword::Aor => match self.parse_aor() {
+                        Ok(aor) => return Some(Item::Aor(aor)),
+                        Err(err) => self.errors.push(err),
+                    },
+                    Keyword::Packing => match self.parse_packing() {
+                        Ok(packing) => return Some(Item::Packing(packing)),
+                        Err(err) => self.errors.push(err),
+                    },
+                    Keyword::Api => match self.parse_api() {
+                        Ok(api) => return Some(Item::Api(api)),
+                        Err(err) => self.errors.push(err),
+                    },
+                    _ => {
+                        self.handle_toplevel();
+                    }
                 }
-                .into());
+                continue;
             }
-        };
-        Ok(item)
+            self.handle_toplevel();
+        }
+        None
+    }
+
+    fn handle_toplevel(&mut self) {
+        let bad_token = self.consume();
+        self.errors.push(
+            ParseError::TopLevelNonItem {
+                kind: bad_token.kind,
+                span: bad_token.span.into(),
+            }
+            .into(),
+        );
+
+        while let Some(potential) = self.peek() {
+            if !matches!(potential, TokenKind::Keyword(_)) {
+                self.consume();
+            } else {
+                return;
+            }
+        }
+    }
+
+    fn expect_and_push(&mut self, kind: TokenKind) {
+        if let Err(report) = self.expect(kind) {
+            self.errors.push(report)
+        }
     }
 
     fn expect(&mut self, kind: TokenKind) -> miette::Result<Token> {

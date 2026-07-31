@@ -32,12 +32,12 @@ fn main() -> miette::Result<()> {
 
     let parser = Parser::new(lexer);
     let ast = parser.parse(&fname);
-    // println!("{:#?}", ast);
+    println!("{:#?}", ast);
 
-    let analyzer = SemanticAnalysis::new(ast);
-    let (_, analyzer) = analyzer.analyze();
-
-    println!("{analyzer:#?}");
+    // let analyzer = SemanticAnalysis::new(ast);
+    // let (_, analyzer) = analyzer.analyze();
+    //
+    // println!("{analyzer:#?}");
 
     Ok(())
 }
