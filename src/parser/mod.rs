@@ -19,8 +19,10 @@ mod stmt;
 pub struct Parser<'a> {
     pub lexer: Lexer<'a>,
     pub token: Option<Token>,
-    pub errors: Vec<Report>,
+    pub errors: Vec<ParseError>,
 }
+
+type ParseResult<T> = Result<T, ParseError>;
 
 impl<'a> Parser<'a> {
     pub fn new(lexer: Lexer<'a>) -> Self {
@@ -46,11 +48,11 @@ impl<'a> Parser<'a> {
         if !self.errors.is_empty() {
             eprintln!("Found {} syntax errors ->\n", self.errors.len());
         }
-        for (no, report) in self.errors.into_iter().enumerate() {
+        for (no, error) in self.errors.into_iter().enumerate() {
             eprintln!(
                 "Syntax Error {}:\n {:?}\n",
                 no + 1,
-                report.with_source_code(source.clone())
+                Report::from(error).with_source_code(source.clone())
             );
         }
 
@@ -134,13 +136,10 @@ impl<'a> Parser<'a> {
 
     fn handle_toplevel(&mut self) {
         let bad_token = self.consume();
-        self.errors.push(
-            ParseError::TopLevelNonItem {
-                kind: bad_token.kind,
-                span: bad_token.span.into(),
-            }
-            .into(),
-        );
+        self.errors.push(ParseError::TopLevelNonItem {
+            kind: bad_token.kind,
+            span: bad_token.span.into(),
+        });
 
         while let Some(potential) = self.peek() {
             if !matches!(potential, TokenKind::Keyword(_)) {
@@ -157,7 +156,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn expect(&mut self, kind: TokenKind) -> miette::Result<Token> {
+    fn expect(&mut self, kind: TokenKind) -> ParseResult<Token> {
         match self.peek() {
             Some(token_kind) if token_kind == kind => Ok(self.consume()),
             Some(_) => {
@@ -166,15 +165,13 @@ impl<'a> Parser<'a> {
                     expected: Expected::Kind(kind),
                     found: Found::Kind(token.kind),
                     span: token.span.into(),
-                }
-                .into())
+                })
             }
             None => Err(ParseError::Unexpected {
                 expected: Expected::Kind(kind),
                 found: Found::Eof,
                 span: (self.lexer.input().len().saturating_sub(1), 1).into(),
-            }
-            .into()),
+            }),
         }
     }
 }

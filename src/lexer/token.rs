@@ -39,6 +39,17 @@ pub fn from_spans(span1: Span, span2: Span) -> miette::SourceSpan {
 
 /*---------------------------------------------------------------------------------------------------*/
 
+pub const COLON: TokenKind = TokenKind::Punctuation(Punctuation::Colon);
+pub const SEMICOLON: TokenKind = TokenKind::Punctuation(Punctuation::Semicolon);
+pub const COMMA: TokenKind = TokenKind::Punctuation(Punctuation::Comma);
+
+pub const C_OPEN: TokenKind = TokenKind::Delimiter(Delimiter::CurlyOpen);
+pub const C_CLOSE: TokenKind = TokenKind::Delimiter(Delimiter::CurlyClose);
+pub const P_OPEN: TokenKind = TokenKind::Delimiter(Delimiter::ParenOpen);
+pub const P_CLOSE: TokenKind = TokenKind::Delimiter(Delimiter::ParenClose);
+pub const S_OPEN: TokenKind = TokenKind::Delimiter(Delimiter::SquareOpen);
+pub const S_CLOSE: TokenKind = TokenKind::Delimiter(Delimiter::SquareClose);
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TokenKind {
     String,

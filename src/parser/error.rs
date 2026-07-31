@@ -45,6 +45,12 @@ pub enum ParseError {
         #[label("{op} is not an infix operator")]
         span: SourceSpan,
     },
+    #[error("'{delimiter}' missing")]
+    MustDelimit {
+        delimiter: TokenKind,
+        #[label("add '{delimiter}' before this")]
+        span: SourceSpan,
+    },
 }
 
 #[derive(Debug)]

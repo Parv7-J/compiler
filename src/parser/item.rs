@@ -1,47 +1,35 @@
 use super::Parser;
 use super::ast::*;
 use crate::lexer::token::*;
+use crate::parser::ParseResult;
+use crate::parser::error::Found;
 use crate::parser::error::ParseError;
 
 impl Parser<'_> {
-    pub fn parse_get(&mut self) -> miette::Result<Get> {
+    pub fn parse_get(&mut self) -> ParseResult<Get> {
         let get = self.consume();
-        let imports = self.parse_identlist(TokenKind::Keyword(Keyword::From));
+        let imports =
+            self.parse_delimited(COMMA, TokenKind::Keyword(Keyword::From), Self::parse_ident);
         if imports.is_empty() {
             return Err(ParseError::EmptyImportsList {
                 span: get.span.into(),
-            }
-            .into());
+            });
         }
-        self.expect_and_push(TokenKind::Keyword(Keyword::From));
+        self.expect(TokenKind::Keyword(Keyword::From))?;
         let module = self.parse_string()?;
-        self.expect_and_push(TokenKind::Punctuation(Punctuation::Semicolon));
+        self.expect_and_push(SEMICOLON);
         Ok(Get { imports, module })
     }
 
-    pub fn parse_require(&mut self) -> miette::Result<Require> {
-        self.consume();
-        let api = self.option_ident();
-        self.expect_and_push(TokenKind::Keyword(Keyword::For));
-        Ok(Require {
-            ident: self.option_ident(),
-            api,
-            procedures: self.parse_procs()?,
-        })
-    }
-
-    pub fn parse_api(&mut self) -> miette::Result<Api> {
+    pub fn parse_api(&mut self) -> ParseResult<Api> {
         self.consume();
         let ident = self.option_ident();
         let super_api = if let Ok(token) = self.expect(TokenKind::Keyword(Keyword::Also)) {
-            let list = self.parse_identlist(TokenKind::Delimiter(Delimiter::CurlyOpen));
+            let list = self.parse_delimited(COMMA, C_CLOSE, Self::parse_ident);
             if list.is_empty() {
-                self.errors.push(
-                    ParseError::EmptySubApis {
-                        span: token.span.into(),
-                    }
-                    .into(),
-                );
+                self.errors.push(ParseError::EmptySubApis {
+                    span: token.span.into(),
+                });
             }
             list
         } else {
@@ -54,7 +42,7 @@ impl Parser<'_> {
         })
     }
 
-    pub fn parse_methods(&mut self) -> miette::Result<Methods> {
+    pub fn parse_methods(&mut self) -> ParseResult<Methods> {
         self.consume();
         Ok(Methods {
             ident: self.option_ident(),
@@ -62,17 +50,25 @@ impl Parser<'_> {
         })
     }
 
-    pub fn parse_proc(&mut self) -> miette::Result<Procedure> {
+    pub fn parse_require(&mut self) -> ParseResult<Require> {
+        self.consume();
+        let api = self.option_ident();
+        self.expect_and_push(TokenKind::Keyword(Keyword::For));
+        Ok(Require {
+            ident: self.option_ident(),
+            api,
+            procedures: self.parse_procs()?,
+        })
+    }
+
+    pub fn parse_proc(&mut self) -> ParseResult<Procedure> {
         self.consume();
         let ident = self.option_ident();
-        self.expect(TokenKind::Delimiter(Delimiter::SquareOpen))?;
-        let args = self.parse_fields(TokenKind::Delimiter(Delimiter::SquareClose));
-        self.expect(TokenKind::Delimiter(Delimiter::SquareClose))?;
+        self.expect(S_OPEN)?;
+        let args = self.parse_delimited(COMMA, S_CLOSE, Self::parse_field);
+        self.expect(S_CLOSE)?;
 
-        let return_value = if self
-            .expect(TokenKind::Punctuation(Punctuation::Colon))
-            .is_ok()
-        {
+        let return_value = if self.expect(COLON).is_ok() {
             Some(self.parse_identty()?)
         } else {
             None
@@ -86,26 +82,26 @@ impl Parser<'_> {
         })
     }
 
-    pub fn parse_packing(&mut self) -> miette::Result<Packing> {
+    pub fn parse_packing(&mut self) -> ParseResult<Packing> {
         self.consume();
         let ident = self.parse_ident()?;
-        self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;
-        let fields = self.parse_fields(TokenKind::Delimiter(Delimiter::CurlyClose));
-        self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
+        self.expect(C_OPEN)?;
+        let fields = self.parse_delimited(COMMA, C_CLOSE, Self::parse_field);
+        self.expect(C_CLOSE)?;
         Ok(Packing { ident, fields })
     }
 
-    pub fn parse_aor(&mut self) -> miette::Result<Aor> {
+    pub fn parse_aor(&mut self) -> ParseResult<Aor> {
         self.consume();
         let ident = self.parse_ident()?;
-        self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;
-        let variants = self.parse_variants();
-        self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
+        self.expect(C_OPEN)?;
+        let variants = self.parse_delimited(COMMA, C_CLOSE, Self::parse_variant);
+        self.expect(C_CLOSE)?;
         Ok(Aor { ident, variants })
     }
 
-    fn parse_procs(&mut self) -> miette::Result<Vec<Procedure>> {
-        self.expect(TokenKind::Delimiter(Delimiter::CurlyOpen))?;
+    fn parse_procs(&mut self) -> ParseResult<Vec<Procedure>> {
+        self.expect_and_push(C_OPEN);
         let mut procs = Vec::new();
         loop {
             if matches!(self.peek(), Some(TokenKind::Keyword(Keyword::Proc))) {
@@ -114,84 +110,41 @@ impl Parser<'_> {
             }
             break;
         }
-        self.expect(TokenKind::Delimiter(Delimiter::CurlyClose))?;
+        self.expect_and_push(C_CLOSE);
         Ok(procs)
     }
 
-    fn parse_identlist(&mut self, closing: TokenKind) -> Vec<SpannedIdent> {
-        let mut idents = Vec::new();
+    fn parse_delimited<T>(
+        &mut self,
+        delimiter: TokenKind,
+        end: TokenKind,
+        mut method: impl FnMut(&mut Self) -> ParseResult<T>,
+    ) -> Vec<T> {
+        let mut list = Vec::new();
         loop {
-            match self.parse_ident() {
-                Ok(ident) => idents.push(ident),
+            match method(self) {
+                Ok(list_item) => list.push(list_item),
                 Err(report) => {
                     self.errors.push(report);
-                    self.synchronize(|kind| {
-                        kind == closing
-                            || matches!(kind, TokenKind::Punctuation(Punctuation::Comma))
-                    });
+                    self.synchronize(|kind| kind == delimiter || kind == end);
                 }
             }
-            if self
-                .expect(TokenKind::Punctuation(Punctuation::Comma))
-                .is_err()
-            {
-                break;
-            }
-        }
-        idents
-    }
 
-    fn parse_fields(&mut self, closing: TokenKind) -> Vec<Field> {
-        let mut fields = Vec::new();
-        loop {
-            match self.parse_field() {
-                Ok(field) => fields.push(field),
-                Err(report) => {
-                    self.errors.push(report);
-                    self.synchronize(|kind| {
-                        kind == closing
-                            || matches!(kind, TokenKind::Punctuation(Punctuation::Comma))
-                    });
+            if let Err(ParseError::Unexpected {
+                expected: _,
+                found,
+                span,
+            }) = self.expect(delimiter)
+            {
+                if !matches!(found, Found::Kind(TokenKind::Ident)) {
+                    break;
                 }
-            };
 
-            if self
-                .expect(TokenKind::Punctuation(Punctuation::Comma))
-                .is_err()
-            {
-                break;
+                self.errors
+                    .push(ParseError::MustDelimit { delimiter, span });
             }
         }
-
-        fields
-    }
-
-    fn parse_variants(&mut self) -> Vec<Variant> {
-        let mut variants = Vec::new();
-        loop {
-            match self.parse_variant() {
-                Ok(variant) => variants.push(variant),
-                Err(report) => {
-                    self.errors.push(report);
-                    self.synchronize(|kind| {
-                        matches!(
-                            kind,
-                            TokenKind::Punctuation(Punctuation::Comma)
-                                | TokenKind::Delimiter(Delimiter::CurlyClose)
-                        )
-                    });
-                }
-            };
-
-            if self
-                .expect(TokenKind::Punctuation(Punctuation::Comma))
-                .is_err()
-            {
-                break;
-            }
-        }
-
-        variants
+        list
     }
 
     fn synchronize(&mut self, f: impl Fn(TokenKind) -> bool) {

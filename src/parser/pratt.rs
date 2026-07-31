@@ -1,6 +1,7 @@
 use super::Parser;
 use super::ast::*;
 use crate::lexer::token::*;
+use crate::parser::ParseResult;
 use crate::parser::error::Expected;
 use crate::parser::error::Found;
 use crate::parser::error::ParseError;
@@ -11,18 +12,18 @@ const POSTFIX_BP: u8 = 19;
 
 impl Parser<'_> {
     ///Expression statements are expressions that end with a semicolon, thus they allow assignments
-    pub fn parse_exprstmt(&mut self) -> miette::Result<Stmt> {
+    pub fn parse_exprstmt(&mut self) -> ParseResult<Stmt> {
         let expr = self.expr_bp(EXPR_STMT_BP)?;
         self.expect(TokenKind::Punctuation(Punctuation::Semicolon))?;
         Ok(Stmt::Expr(expr))
     }
 
     ///Expressions evaluate to a value, thus no assignments are allowed in expressions
-    pub fn parse_expr(&mut self) -> miette::Result<Expr> {
+    pub fn parse_expr(&mut self) -> ParseResult<Expr> {
         self.expr_bp(EXPR_BP)
     }
 
-    fn expr_bp(&mut self, mut min_bp: u8) -> miette::Result<Expr> {
+    fn expr_bp(&mut self, mut min_bp: u8) -> ParseResult<Expr> {
         let token = match self.next() {
             Some(token) => token,
             None => {
